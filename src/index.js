@@ -68,4 +68,5 @@ const { App } = pkg;
     console.error("❌ Slack App initialization failed:", err);
     process.exit(1);
   }
+  
 })();

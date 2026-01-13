@@ -20,8 +20,13 @@
   "homepage": "https://github.com/ashish-pandey8795/Lumax_app#readme",
   "dependencies": {
     "@slack/bolt": "^4.6.0",
+<<<<<<< HEAD
+=======
+    "axios": "^1.13.2",
+>>>>>>> e34bb01daa14966f939aec2ca951fdba05b2804e
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "node-fetch": "^3.3.2",
     "pg": "^8.16.3"
   }
 }
