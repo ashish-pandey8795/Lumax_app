@@ -1,21 +1,13 @@
 require("dotenv").config();
-const { App, ExpressReceiver } = require("@slack/bolt");
+const { App } = require("@slack/bolt");
 
-// Initialize ExpressReceiver
-const receiver = new ExpressReceiver({
+// ⚡ Minimal Slack app in Socket Mode
+const app = new App({
+  token: process.env.SLACK_BOT_TOKEN,      // Bot token
+  appToken: process.env.SLACK_APP_TOKEN,   // App-level token (starts with xapp-)
   signingSecret: process.env.SLACK_SIGNING_SECRET,
-  clientId: process.env.SLACK_CLIENT_ID,
-  clientSecret: process.env.SLACK_CLIENT_SECRET,
-  stateSecret: process.env.SESSION_SECRET || "secret",
-  installerOptions: {
-    redirectUriPath: "/slack/oauth_redirect",
-    stateVerification: false,
-  },
-  scopes: ["commands", "chat:write", "users:read"],
+  socketMode: true,                         // <-- important
 });
-
-// Initialize Slack App
-const app = new App({ receiver });
 
 // Simple home tab event demo
 app.event("app_home_opened", async ({ event, client }) => {
@@ -37,14 +29,14 @@ app.event("app_home_opened", async ({ event, client }) => {
             type: "section",
             text: {
               type: "mrkdwn",
-              text: "Your app is connected and listening!",
+              text: "Your app is connected and listening via Socket Mode!",
             },
           },
         ],
       },
     });
   } catch (err) {
-    console.error("Error publishing home tab:", err);
+    console.error(err);
   }
 });
 
@@ -53,16 +45,12 @@ app.command("/hello", async ({ ack, body, client }) => {
   await ack();
   await client.chat.postMessage({
     channel: body.user_id,
-    text: `👋 Hello <@${body.user_id}>! Your Slack app is connected.`,
+    text: `👋 Hello <@${body.user_id}>! Your Slack app is connected via Socket Mode.`,
   });
 });
 
-// Express endpoint to confirm server is running
-receiver.router.get("/", (_, res) => res.send("✅ Slack App demo running"));
-
 // Start the app
 (async () => {
-  const PORT = process.env.PORT || 3000;
-  await app.start(PORT);
-  console.log(`⚡ Slack App demo running on port ${PORT}`);
+  await app.start();
+  console.log("⚡ Slack app running in Socket Mode!");
 })();
