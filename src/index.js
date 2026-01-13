@@ -1,56 +1,71 @@
-require("dotenv").config();
-const { App } = require("@slack/bolt");
+import dotenv from "dotenv";
+dotenv.config();
 
-// ⚡ Minimal Slack app in Socket Mode
-const app = new App({
-  token: process.env.SLACK_BOT_TOKEN,      // Bot token
-  appToken: process.env.SLACK_APP_TOKEN,   // App-level token (starts with xapp-)
-  signingSecret: process.env.SLACK_SIGNING_SECRET,
-  socketMode: true,                         // <-- important
-});
+import { initDb, pool } from "./db/init.js";
+import pkg from "@slack/bolt";
+const { App } = pkg;
 
-// Simple home tab event demo
-app.event("app_home_opened", async ({ event, client }) => {
-  try {
-    await client.views.publish({
-      user_id: event.user,
-      view: {
-        type: "home",
-        callback_id: "home_demo",
-        blocks: [
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: "*✅ Slack App Connectivity Demo*",
-            },
-          },
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: "Your app is connected and listening via Socket Mode!",
-            },
-          },
-        ],
-      },
-    });
-  } catch (err) {
-    console.error(err);
-  }
-});
-
-// Simple slash command demo
-app.command("/hello", async ({ ack, body, client }) => {
-  await ack();
-  await client.chat.postMessage({
-    channel: body.user_id,
-    text: `👋 Hello <@${body.user_id}>! Your Slack app is connected via Socket Mode.`,
-  });
-});
-
-// Start the app
 (async () => {
-  await app.start();
-  console.log("⚡ Slack app running in Socket Mode!");
+  // 1️⃣ DB connect
+  let dbConnected = false;
+  try {
+    await initDb();
+    dbConnected = true;
+  } catch (err) {
+    console.error("⚠️ DB connection failed, Slack app will still start.");
+  }
+
+  // 2️⃣ Check Slack env vars
+  const requiredEnv = ["SLACK_SIGNING_SECRET", "SLACK_BOT_TOKEN"];
+  for (const key of requiredEnv) {
+    if (!process.env[key]) {
+      console.error(`❌ Missing environment variable: ${key}`);
+      process.exit(1);
+    }
+  }
+
+  // 3️⃣ Initialize Slack App for single workspace
+  try {
+    const app = new App({
+      token: process.env.SLACK_BOT_TOKEN,
+      signingSecret: process.env.SLACK_SIGNING_SECRET,
+    });
+
+    // Home tab demo
+    app.event("app_home_opened", async ({ event, client }) => {
+      try {
+        await client.views.publish({
+          user_id: event.user,
+          view: {
+            type: "home",
+            callback_id: "home_demo",
+            blocks: [
+              { type: "section", text: { type: "mrkdwn", text: "*✅ Slack App Connectivity Demo*" } },
+              { type: "section", text: { type: "mrkdwn", text: `DB status: ${dbConnected ? "✅ Connected" : "❌ Failed"}` } }
+            ],
+          },
+        });
+      } catch (err) {
+        console.error("Error publishing home tab:", err);
+      }
+    });
+
+    // Slash command
+    app.command("/hello", async ({ ack, body, client }) => {
+      await ack();
+      await client.chat.postMessage({
+        channel: body.user_id,
+        text: `👋 Hello <@${body.user_id}>! Slack connected. DB: ${dbConnected ? "✅ Connected" : "❌ Failed"}`,
+      });
+    });
+
+    // Start Slack app
+    const PORT = process.env.PORT || 3000;
+    await app.start(PORT);
+    console.log(`⚡ Slack App running on port ${PORT}`);
+    console.log(`ℹ️ Database status: ${dbConnected ? "✅ Connected" : "❌ Failed"}`);
+  } catch (err) {
+    console.error("❌ Slack App initialization failed:", err);
+    process.exit(1);
+  }
 })();
