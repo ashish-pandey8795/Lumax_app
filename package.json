@@ -6,9 +6,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start":"node src/index.js",
-    "dev":"node src/index.js"
-
+    "start": "node src/index.js",
+    "dev": "node src/index.js"
   },
   "repository": {
     "type": "git",
@@ -23,11 +22,10 @@
   "homepage": "https://github.com/ashish-pandey8795/Lumax_app#readme",
   "dependencies": {
     "@slack/bolt": "^4.6.0",
-
     "axios": "^1.13.2",
-
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
     "pg": "^8.16.3"
   }
