@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import express from "express"; // ✅ fix for bundlers/tools
 import { initDb, pool } from "./db/init.js";
 import pkg from "@slack/bolt";
 const { App } = pkg;
@@ -68,5 +69,4 @@ const { App } = pkg;
     console.error("❌ Slack App initialization failed:", err);
     process.exit(1);
   }
-  
 })();
