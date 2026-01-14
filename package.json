@@ -1,34 +1,39 @@
 {
-  "name": "project-lumax",
+  "name": "slack-samy-media-lead",
   "version": "1.0.0",
-  "description": "",
-  "type": "module",
+  "description": "Slack app to create leads via /createlead slash command",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node src/index.js",
-    "dev": "node src/index.js"
+    "start": "node index.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ashish-pandey8795/Lumax_app.git"
-  },
-  "keywords": [],
-  "author": "",
+  "author": "Syed Ahmed Samy",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/ashish-pandey8795/Lumax_app/issues"
-  },
-  "homepage": "https://github.com/ashish-pandey8795/Lumax_app#readme",
   "dependencies": {
-    "@slack/bolt": "^4.6.0",
-    "axios": "^1.13.2",
-    "body-parser": "^2.2.2",
+    "@neondatabase/serverless": "^1.0.1",
+    "@slack/bolt": "^3.22.0",
+    "@slack/web-api": "^7.13.0",
+    "axios": "^1.10.0",
+    "body-parser": "^2.2.0",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "form-data": "^4.0.3",
+    "fs": "^0.0.1-security",
+    "install": "^0.13.0",
+    "jsonwebtoken": "^9.0.2",
     "node-cron": "^4.2.1",
-    "node-fetch": "^3.3.2",
-    "pg": "^8.16.3"
+    "node-fetch": "^2.7.0",
+    "npm": "^11.4.2",
+    "path": "^0.12.7",
+    "pg": "^8.16.3",
+    "uuid": "^11.1.0"
   }
 }
+
+
+
+
+
+
+
