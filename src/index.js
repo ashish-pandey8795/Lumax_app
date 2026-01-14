@@ -570,7 +570,7 @@ app.view("invoice_modal", async ({ ack, view, body }) => {
 
   console.log("✅ Payload to API:", payload);
 
-  await fetch("http://localhost:3000/api/bill", {
+  await fetch("https://lumax-app.vercel.app/api/bill", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
