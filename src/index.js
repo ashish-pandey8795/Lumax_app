@@ -444,18 +444,6 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-async function initDb() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS slack_installations (
-      id SERIAL PRIMARY KEY,
-      team_id TEXT UNIQUE NOT NULL,
-      team_name TEXT,
-      bot_token TEXT NOT NULL,
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-}
-
 /* ----------------------------------
    🔌 EXPRESS RECEIVER
 ---------------------------------- */
@@ -464,47 +452,15 @@ const receiver = new ExpressReceiver({
   clientId: process.env.SLACK_CLIENT_ID,
   clientSecret: process.env.SLACK_CLIENT_SECRET,
   stateSecret: process.env.SESSION_SECRET || "slack-secret",
-
   scopes: ["commands", "chat:write"],
-
   installerOptions: {
     redirectUriPath: "/slack/oauth_redirect",
     stateVerification: false,
   },
-
-  installationStore: {
-    storeInstallation: async (installation) => {
-      await pool.query(
-        `
-        INSERT INTO slack_installations (team_id, team_name, bot_token)
-        VALUES ($1,$2,$3)
-        ON CONFLICT (team_id)
-        DO UPDATE SET bot_token = EXCLUDED.bot_token
-        `,
-        [
-          installation.team.id,
-          installation.team.name,
-          installation.bot.token,
-        ]
-      );
-    },
-
-    fetchInstallation: async ({ teamId }) => {
-      const res = await pool.query(
-        `SELECT * FROM slack_installations WHERE team_id=$1`,
-        [teamId]
-      );
-      if (!res.rows.length) throw new Error("No installation");
-      return {
-        team: { id: res.rows[0].team_id },
-        bot: { token: res.rows[0].bot_token },
-      };
-    },
-  },
 });
 
 /* ----------------------------------
-   🌐 EXPRESS
+   🌐 EXPRESS APP
 ---------------------------------- */
 const expressApp = receiver.app;
 expressApp.use(express.json());
@@ -524,7 +480,7 @@ const app = new App({
 });
 
 /* ----------------------------------
-   🌱 PLANT MASTER
+   🏭 PLANTS MASTER
 ---------------------------------- */
 const PLANTS = [
   {
@@ -547,7 +503,7 @@ const PLANTS = [
 const buildInvoiceModal = (plantCode = "", plantName = "") => ({
   type: "modal",
   callback_id: "invoice_modal",
-  title: { type: "plain_text", text: "Create Invoice" },
+  title: { type: "plain_text", text: "Create Bill" },
   submit: { type: "plain_text", text: "Submit" },
   close: { type: "plain_text", text: "Cancel" },
 
@@ -558,7 +514,7 @@ const buildInvoiceModal = (plantCode = "", plantName = "") => ({
       label: { type: "plain_text", text: "Company" },
       element: {
         type: "static_select",
-        action_id: "company_select",
+        action_id: "value",
         options: [
           {
             text: { type: "plain_text", text: "LUMAX AUTO TECH LTD" },
@@ -575,6 +531,7 @@ const buildInvoiceModal = (plantCode = "", plantName = "") => ({
       element: {
         type: "static_select",
         action_id: "plant_select",
+        dispatch_action: true,
         options: PLANTS.map((p) => ({
           text: { type: "plain_text", text: p.plantCode },
           value: p.plantCode,
@@ -608,9 +565,23 @@ const buildInvoiceModal = (plantCode = "", plantName = "") => ({
 
     {
       type: "input",
+      block_id: "contractor",
+      label: { type: "plain_text", text: "Contractor Name" },
+      element: { type: "plain_text_input", action_id: "value" },
+    },
+
+    {
+      type: "input",
       block_id: "invoice_no",
       label: { type: "plain_text", text: "Invoice No" },
       element: { type: "plain_text_input", action_id: "value" },
+    },
+
+    {
+      type: "input",
+      block_id: "invoice_date",
+      label: { type: "plain_text", text: "Invoice Date" },
+      element: { type: "datepicker", action_id: "value" },
     },
 
     {
@@ -623,7 +594,7 @@ const buildInvoiceModal = (plantCode = "", plantName = "") => ({
 });
 
 /* ----------------------------------
-   ⚡ /invoice COMMAND
+   /invoice COMMAND
 ---------------------------------- */
 app.command("/invoice", async ({ ack, body, client }) => {
   await ack();
@@ -635,7 +606,7 @@ app.command("/invoice", async ({ ack, body, client }) => {
 });
 
 /* ----------------------------------
-   🔁 PLANT SELECT → AUTO FILL NAME
+   🔁 PLANT SELECT ACTION
 ---------------------------------- */
 app.action("plant_select", async ({ ack, body, client }) => {
   await ack();
@@ -651,9 +622,9 @@ app.action("plant_select", async ({ ack, body, client }) => {
 });
 
 /* ----------------------------------
-   ✅ MODAL SUBMIT
+   📩 MODAL SUBMIT
 ---------------------------------- */
-app.view("invoice_modal", async ({ ack, view, body }) => {
+app.view("invoice_modal", async ({ ack, view }) => {
   await ack();
 
   const v = view.state.values;
@@ -662,25 +633,30 @@ app.view("invoice_modal", async ({ ack, view, body }) => {
   const plant = PLANTS.find((p) => p.plantCode === plantCode);
 
   const payload = {
-    company: v.company.company_select.selected_option.value,
+    companyName: v.company.value.selected_option.value,
     plantCode,
     plantName: plant.plantName,
     location: plant.location,
     billMonth: v.bill_month.value.selected_date,
-    invoiceNo: v.invoice_no.value.value,
-    amount: v.amount.value.value,
-    createdBy: body.user.id,
+    contractorName: v.contractor.value.value,
+    invoices: [
+      {
+        invoiceNo: v.invoice_no.value.value,
+        invoiceDate: v.invoice_date.value.selected_date,
+        amount: v.amount.value.value,
+        total: v.amount.value.value,
+      },
+    ],
   };
 
-  console.log("✅ FINAL PAYLOAD:", payload);
+  console.log("✅ FINAL BILL PAYLOAD", payload);
 });
 
 /* ----------------------------------
-   🚀 START
+   🚀 START SERVER
 ---------------------------------- */
 (async () => {
-  await initDb();
   const PORT = process.env.PORT || 3000;
   await app.start(PORT);
-  console.log(`⚡ Slack app running on ${PORT}`);
+  console.log(`⚡ Slack App running on http://localhost:${PORT}`);
 })();
