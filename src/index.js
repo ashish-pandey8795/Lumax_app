@@ -500,9 +500,9 @@ const PLANTS = [
 ];
 
 /* ----------------------------------
-   🧱 MODAL BUILDER (CLEAN & SAFE)
+   🧱 MODAL BUILDER
 ---------------------------------- */
-const buildInvoiceModal = () => ({
+const buildInvoiceModal = (initialPlantName = "") => ({
   type: "modal",
   callback_id: "invoice_modal",
   title: { type: "plain_text", text: "Create Invoice" },
@@ -537,6 +537,17 @@ const buildInvoiceModal = () => ({
           text: { type: "plain_text", text: p.plantCode },
           value: p.plantCode,
         })),
+      },
+    },
+
+    {
+      type: "input",
+      block_id: "plant_name",
+      label: { type: "plain_text", text: "Plant Name" },
+      element: {
+        type: "plain_text_input",
+        action_id: "plant_name_input",
+        initial_value: initialPlantName,
       },
     },
 
@@ -585,21 +596,54 @@ app.command("/invoice", async ({ ack, body, client }) => {
 });
 
 /* ----------------------------------
-   ✅ MODAL SUBMIT (AUTO DERIVE PLANT NAME)
+   ⚡ AUTO-FILL PLANT NAME ON PLANT CODE SELECTION
+---------------------------------- */
+app.action("plant_select", async ({ ack, body, client, action, view }) => {
+  await ack();
+
+  const selectedPlantCode = action.selected_option.value;
+  const plant = PLANTS.find((p) => p.plantCode === selectedPlantCode);
+  if (!plant) return;
+
+  const updatedView = buildInvoiceModal(plant.plantName);
+
+  await client.views.update({
+    view_id: view.id,
+    hash: view.hash,
+    view: {
+      ...updatedView,
+      blocks: updatedView.blocks.map((block) => {
+        if (block.block_id === "plant") {
+          return {
+            ...block,
+            element: {
+              ...block.element,
+              initial_option: {
+                text: { type: "plain_text", text: plant.plantCode },
+                value: plant.plantCode,
+              },
+            },
+          };
+        }
+        return block;
+      }),
+    },
+  });
+});
+
+/* ----------------------------------
+   ✅ MODAL SUBMIT
 ---------------------------------- */
 app.view("invoice_modal", async ({ ack, view, body }) => {
   await ack();
 
   const v = view.state.values;
 
-  const plantCode = v.plant.plant_select.selected_option.value;
-  const plant = PLANTS.find((p) => p.plantCode === plantCode);
-
   const payload = {
     company: v.company.company_select.selected_option.value,
-    plantCode,
-    plantName: plant.plantName,
-    location: plant.location,
+    plantCode: v.plant.plant_select.selected_option.value,
+    plantName: v.plant_name.plant_name_input.value,
+    location: PLANTS.find((p) => p.plantCode === v.plant.plant_select.selected_option.value)?.location,
     billMonth: v.bill_month.value.selected_date,
     invoiceNo: v.invoice_no.value.value,
     amount: v.amount.value.value,
