@@ -1,14 +1,9 @@
 import "dotenv/config";
-import express from "express";
-import pkg from "@slack/bolt";
+import { App, ExpressReceiver } from "@slack/bolt";
 import cors from "cors";
 import bodyParser from "body-parser";
-import pg from "pg";
-
-import billRoutes from "./routes/bill.routes.js"; // ✅ Bill routes import
-
-const { App, ExpressReceiver } = pkg;
-const { Pool } = pg;
+import { Pool } from "pg";
+import billRoutes from "./routes/bill.routes.js";
 
 /* ----------------------------------
    🗄️ DATABASE
@@ -51,11 +46,7 @@ const receiver = new ExpressReceiver({
         ON CONFLICT (team_id)
         DO UPDATE SET bot_token = EXCLUDED.bot_token
         `,
-        [
-          installation.team.id,
-          installation.team.name,
-          installation.bot.token,
-        ]
+        [installation.team.id, installation.team.name, installation.bot.token]
       );
     },
 
@@ -77,24 +68,15 @@ const receiver = new ExpressReceiver({
    🌐 EXPRESS APP
 ---------------------------------- */
 const expressApp = receiver.app;
-expressApp.use(express.json());
 expressApp.use(cors());
 expressApp.use(bodyParser.json());
 
 // ✅ Bill API routes
 expressApp.use("/api/bill", billRoutes);
 
-// Basic health check
+// Health check
 expressApp.get("/", (_, res) => {
   res.send("✅ Slack App Running");
-});
-
-/* ----------------------------------
-   🤖 SLACK APP
----------------------------------- */
-const app = new App({
-  receiver,
-  processBeforeResponse: true,
 });
 
 /* ----------------------------------
@@ -203,9 +185,10 @@ const buildInvoiceModal = (plantCode = "", plantName = "") => ({
 /* ----------------------------------
    ⚡ /invoice COMMAND
 ---------------------------------- */
+const app = new App({ receiver, processBeforeResponse: true });
+
 app.command("/invoice", async ({ ack, body, client }) => {
   await ack();
-
   await client.views.open({
     trigger_id: body.trigger_id,
     view: buildInvoiceModal(),
@@ -213,16 +196,14 @@ app.command("/invoice", async ({ ack, body, client }) => {
 });
 
 /* ----------------------------------
-   ⚡ AUTO-FILL PLANT NAME ON PLANT CODE SELECTION
+   ⚡ AUTO-FILL PLANT NAME
 ---------------------------------- */
 app.action("plant_select", async ({ ack, body, client, action, view }) => {
   await ack();
-
   const selectedPlantCode = action.selected_option.value;
   const plant = PLANTS.find((p) => p.plantCode === selectedPlantCode);
   if (!plant) return;
 
-  // Update the modal by only changing the plant_name input
   const updatedBlocks = view.blocks.map((block) => {
     if (block.block_id === "plant_name") {
       return {
@@ -233,7 +214,6 @@ app.action("plant_select", async ({ ack, body, client, action, view }) => {
         },
       };
     }
-    // Also update the selected plant code in the dropdown
     if (block.block_id === "plant") {
       return {
         ...block,
@@ -252,10 +232,7 @@ app.action("plant_select", async ({ ack, body, client, action, view }) => {
   await client.views.update({
     view_id: view.id,
     hash: view.hash,
-    view: {
-      ...view,
-      blocks: updatedBlocks,
-    },
+    view: { ...view, blocks: updatedBlocks },
   });
 });
 
@@ -264,7 +241,6 @@ app.action("plant_select", async ({ ack, body, client, action, view }) => {
 ---------------------------------- */
 app.view("invoice_modal", async ({ ack, view, body }) => {
   await ack();
-
   const v = view.state.values;
 
   const payload = {
@@ -282,7 +258,6 @@ app.view("invoice_modal", async ({ ack, view, body }) => {
 
   console.log("✅ FINAL PAYLOAD:", payload);
 
-  // Save the invoice to DB
   try {
     await pool.query(
       `
@@ -306,11 +281,11 @@ app.view("invoice_modal", async ({ ack, view, body }) => {
 });
 
 /* ----------------------------------
-   🚀 START
+   🌱 INIT DB ON START
 ---------------------------------- */
-(async () => {
-  await initDb();
-  const PORT = process.env.PORT || 3000;
-  await app.start(PORT);
-  console.log(`⚡ Slack app running on ${PORT}`);
-})();
+await initDb();
+
+/* ----------------------------------
+   🚀 EXPORT FOR VERCEL
+---------------------------------- */
+export default expressApp; // Serverless ready
