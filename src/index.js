@@ -304,18 +304,18 @@
 
 
 
-// index.js
+// src/index.js
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
+import fetch from "node-fetch";
 
 import pkg from "@slack/bolt";
 const { App, ExpressReceiver } = pkg;
 
 import { pool, initDb } from "./db/index.js";
 import billRoutes from "./routes/bill.routes.js";
-import { createBill } from "./controllers/bill.controller.js";
 
 /* ----------------------------------
    🔌 EXPRESS RECEIVER + SLACK
@@ -455,11 +455,13 @@ const buildInvoiceModal = (invoiceRows = [], initialPlantName = "") => {
 ---------------------------------- */
 const slackApp = new App({ receiver, processBeforeResponse: true });
 
+// Open modal command
 slackApp.command("/invoice", async ({ ack, body, client }) => {
   await ack();
   await client.views.open({ trigger_id: body.trigger_id, view: buildInvoiceModal() });
 });
 
+// Auto-fill plant name
 slackApp.action("plant_select", async ({ ack, action, client, view }) => {
   await ack();
   const selectedPlant = PLANTS.find(p => p.plantCode === action.selected_option.value);
@@ -467,36 +469,46 @@ slackApp.action("plant_select", async ({ ack, action, client, view }) => {
   await client.views.update({ view_id: view.id, hash: view.hash, view: buildInvoiceModal([], selectedPlant.plantName) });
 });
 
+// Add invoice row
 slackApp.action("add_invoice", async ({ ack, body, client }) => {
   await ack();
-  const currentBlocks = body.view.blocks.filter(b => b.block_id && b.block_id.startsWith("invoiceNo"));
-  const invoiceRows = currentBlocks.map((_, idx) => ({
-    invoiceNo: body.view.state.values[`invoiceNo_${idx}`]?.invoiceNo?.value || "",
-    amount: body.view.state.values[`amount_${idx}`]?.amount?.value || "",
-    serviceCharge: body.view.state.values[`serviceCharge_${idx}`]?.serviceCharge?.value || "",
-    esi: body.view.state.values[`esi_${idx}`]?.esi?.value || "",
-    pf: body.view.state.values[`pf_${idx}`]?.pf?.value || "",
-    pt: body.view.state.values[`pt_${idx}`]?.pt?.value || "",
-    lwf: body.view.state.values[`lwf_${idx}`]?.lwf?.value || "",
-    total: body.view.state.values[`total_${idx}`]?.total?.value || "",
-    remarks: body.view.state.values[`remarks_${idx}`]?.remarks?.value || "",
-    fileUrl: body.view.state.values[`fileUrl_${idx}`]?.fileUrl?.value || "",
-    invoiceType: body.view.state.values[`invoiceType_${idx}`]?.invoiceType?.selected_option?.value || "",
-    invoiceDate: body.view.state.values[`invoiceDate_${idx}`]?.invoiceDate?.selected_date || ""
-  }));
+
+  const v = body.view.state.values;
+  const invoiceRows = [];
+  let idx = 0;
+  while (v[`invoiceNo_${idx}`]) {
+    invoiceRows.push({
+      invoiceNo: v[`invoiceNo_${idx}`].invoiceNo.value,
+      invoiceDate: v[`invoiceDate_${idx}`].invoiceDate.selected_date || "",
+      invoiceType: v[`invoiceType_${idx}`].invoiceType.selected_option?.value || "",
+      amount: v[`amount_${idx}`].amount.value || "",
+      serviceCharge: v[`serviceCharge_${idx}`].serviceCharge.value || "",
+      esi: v[`esi_${idx}`].esi.value || "",
+      pf: v[`pf_${idx}`].pf.value || "",
+      pt: v[`pt_${idx}`].pt.value || "",
+      lwf: v[`lwf_${idx}`].lwf.value || "",
+      total: v[`total_${idx}`].total.value || "",
+      remarks: v[`remarks_${idx}`].remarks.value || "",
+      fileUrl: v[`fileUrl_${idx}`].fileUrl.value || "",
+    });
+    idx++;
+  }
+
   invoiceRows.push({}); // add empty row
   await client.views.update({ view_id: body.view.id, hash: body.view.hash, view: buildInvoiceModal(invoiceRows) });
 });
 
+// Modal submit
 slackApp.view("invoice_modal", async ({ ack, view, body }) => {
   await ack();
-  const v = view.state.values;
 
-  const invoiceRows = Object.keys(v)
-    .filter(k => k.startsWith("invoiceNo"))
-    .map((blockId, idx) => ({
+  const v = view.state.values;
+  const invoiceRows = [];
+  let idx = 0;
+  while (v[`invoiceNo_${idx}`]) {
+    invoiceRows.push({
       invoiceNo: v[`invoiceNo_${idx}`].invoiceNo.value,
-      invoiceDate: v[`invoiceDate_${idx}`].invoiceDate.selected_date,
+      invoiceDate: v[`invoiceDate_${idx}`].invoiceDate.selected_date || "",
       invoiceType: v[`invoiceType_${idx}`].invoiceType.selected_option?.value || "",
       amount: v[`amount_${idx}`].amount.value,
       serviceCharge: v[`serviceCharge_${idx}`].serviceCharge.value,
@@ -507,7 +519,9 @@ slackApp.view("invoice_modal", async ({ ack, view, body }) => {
       total: v[`total_${idx}`].total.value,
       remarks: v[`remarks_${idx}`].remarks.value,
       fileUrl: v[`fileUrl_${idx}`].fileUrl.value
-    }));
+    });
+    idx++;
+  }
 
   const payload = {
     companyName: v.company.company_select.selected_option.value,
@@ -524,13 +538,13 @@ slackApp.view("invoice_modal", async ({ ack, view, body }) => {
     createdBy: body.user.id
   };
 
-  // Call createBill directly
+  // Send to serverless API
   try {
-    const fakeReq = { body: payload };
-    const fakeRes = {
-      status: (code) => ({ json: (obj) => console.log("Response:", code, obj) }),
-    };
-    await createBill(fakeReq, fakeRes);
+    await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/bill`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
   } catch (err) {
     console.error("Error creating bill:", err);
   }
