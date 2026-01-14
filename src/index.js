@@ -491,17 +491,19 @@ slackApp.action("add_invoice", async ({ ack, body, client }) => {
 });
 
 // MODAL SUBMIT
-slackApp.view("invoice_modal", async ({ ack, view, body }) => {
-  await ack();
+slackApp.view("invoice_modal", async ({ ack, view, body, client }) => {
+  await ack(); // ✅ always first
 
   const v = view.state.values;
+
+  // Extract invoice rows dynamically
   const invoiceRows = [];
   let idx = 0;
   while (v[`invoiceNo_${idx}`]) {
     invoiceRows.push({
       invoiceNo: v[`invoiceNo_${idx}`].invoiceNo.value,
       invoiceDate: v[`invoiceDate_${idx}`].invoiceDate.selected_date,
-      invoiceType: v[`invoiceType_${idx}`].invoiceType.selected_option?.value,
+      invoiceType: v[`invoiceType_${idx}`].invoiceType.selected_option?.value || "",
       amount: Number(v[`amount_${idx}`].amount.value),
       serviceCharge: Number(v[`serviceCharge_${idx}`].serviceCharge.value),
       esi: Number(v[`esi_${idx}`].esi.value),
@@ -515,6 +517,7 @@ slackApp.view("invoice_modal", async ({ ack, view, body }) => {
     idx++;
   }
 
+  // Extract bill-level fields
   const payload = {
     companyName: v.company.company_select.selected_option.value,
     plantCode: v.plant.plant_select.selected_option.value,
@@ -532,16 +535,27 @@ slackApp.view("invoice_modal", async ({ ack, view, body }) => {
 
   console.log("Payload to API:", payload);
 
+  // Submit to your API
   try {
-    await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/bill`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/bill`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("API Error:", errText);
+      await client.chat.postMessage({ channel: body.user.id, text: "❌ Failed to create bill. Check logs." });
+    } else {
+      await client.chat.postMessage({ channel: body.user.id, text: "✅ Bill created successfully!" });
+    }
   } catch (err) {
-    console.error("Error creating bill:", err);
+    console.error("Fetch Error:", err);
+    await client.chat.postMessage({ channel: body.user.id, text: "❌ Failed to connect to API." });
   }
 });
+
 
 /* ----------------------------------
    ✅ EXPORT SERVERLESS HANDLER
