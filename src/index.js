@@ -412,6 +412,26 @@ app.event("app_home_opened", async ({ event, client }) => {
 
 
 
+const PLANTS = [
+  {
+    company: "LUMAX AUTO TECH LTD",
+    plantCode: "7020",
+    plantName: "LMPL PCNT PUNE-7020",
+    location: "Pune"
+  },
+  {
+    company: "LUMAX AUTO TECH LTD",
+    plantCode: "7030",
+    plantName: "LMPL CHAKAN-7030",
+    location: "Chakan"
+  }
+];
+
+
+
+
+
+
 app.command("/invoice", async ({ ack, body, client }) => {
   await ack();
 
@@ -420,69 +440,131 @@ app.command("/invoice", async ({ ack, body, client }) => {
     view: {
       type: "modal",
       callback_id: "invoice_modal",
-      title: {
-        type: "plain_text",
-        text: "Create Invoice",
-      },
-      submit: {
-        type: "plain_text",
-        text: "Submit",
-      },
-      close: {
-        type: "plain_text",
-        text: "Cancel",
-      },
+      title: { type: "plain_text", text: "Create Bill" },
+      submit: { type: "plain_text", text: "Submit" },
+      close: { type: "plain_text", text: "Cancel" },
+
       blocks: [
         {
           type: "input",
-          block_id: "invoice_no",
+          block_id: "company",
+          label: { type: "plain_text", text: "Company" },
+          element: {
+            type: "static_select",
+            action_id: "value",
+            options: [
+              {
+                text: { type: "plain_text", text: "LUMAX AUTO TECH LTD" },
+                value: "LUMAX AUTO TECH LTD"
+              }
+            ]
+          }
+        },
+
+        {
+          type: "input",
+          block_id: "plant",
+          label: { type: "plain_text", text: "Plant Code" },
+          element: {
+            type: "static_select",
+            action_id: "value",
+            options: PLANTS.map(p => ({
+              text: { type: "plain_text", text: p.plantCode },
+              value: p.plantCode
+            }))
+          }
+        },
+
+        {
+          type: "input",
+          block_id: "bill_month",
+          label: { type: "plain_text", text: "Bill For The Month" },
+          element: {
+            type: "datepicker",
+            action_id: "value"
+          }
+        },
+
+        {
+          type: "input",
+          block_id: "contractor",
+          label: { type: "plain_text", text: "Contractor Name" },
+          element: {
+            type: "plain_text_input",
+            action_id: "value"
+          }
+        },
+
+        {
+          type: "input",
+          block_id: "no_of_emp",
           label: {
             type: "plain_text",
-            text: "Invoice Number",
+            text: "No. of Employees (as on date)"
           },
           element: {
             type: "plain_text_input",
-            action_id: "value",
-            placeholder: {
-              type: "plain_text",
-              text: "INV-001",
-            },
-          },
+            action_id: "value"
+          }
         },
+
+        {
+          type: "input",
+          block_id: "mode",
+          label: { type: "plain_text", text: "Mode" },
+          element: {
+            type: "static_select",
+            action_id: "value",
+            options: [
+              {
+                text: { type: "plain_text", text: "Piece Rate" },
+                value: "PIECE"
+              },
+              {
+                text: { type: "plain_text", text: "Monthly Rate" },
+                value: "MONTHLY"
+              }
+            ]
+          }
+        },
+
+        { type: "divider" },
+
+        {
+          type: "input",
+          block_id: "invoice_no",
+          label: { type: "plain_text", text: "Invoice No" },
+          element: {
+            type: "plain_text_input",
+            action_id: "value"
+          }
+        },
+
+        {
+          type: "input",
+          block_id: "invoice_date",
+          label: { type: "plain_text", text: "Invoice Date" },
+          element: {
+            type: "datepicker",
+            action_id: "value"
+          }
+        },
+
         {
           type: "input",
           block_id: "amount",
-          label: {
-            type: "plain_text",
-            text: "Amount",
-          },
+          label: { type: "plain_text", text: "Amount (INR)" },
           element: {
             type: "plain_text_input",
-            action_id: "value",
-            placeholder: {
-              type: "plain_text",
-              text: "1000",
-            },
-          },
-        },
-        {
-          type: "input",
-          block_id: "description",
-          optional: true,
-          label: {
-            type: "plain_text",
-            text: "Description",
-          },
-          element: {
-            type: "plain_text_input",
-            action_id: "value",
-            multiline: true,
-          },
-        },
-      ],
-    },
+            action_id: "value"
+          }
+        }
+      ]
+    }
   });
 });
+
+
 
 
 
@@ -490,19 +572,52 @@ app.command("/invoice", async ({ ack, body, client }) => {
 app.view("invoice_modal", async ({ ack, body, view }) => {
   await ack();
 
-  const values = view.state.values;
+  const v = view.state.values;
 
-  const invoiceNo = values.invoice_no.value.value;
-  const amount = values.amount.value.value;
-  const description = values.description?.value?.value || "";
+  const plantCode =
+    v.plant.value.selected_option.value;
 
-  console.log("🧾 Invoice Created:", {
-    invoiceNo,
-    amount,
-    description,
-    user: body.user.id,
-    team: body.team.id,
-  });
+  const plant = PLANTS.find(
+    p => p.plantCode === plantCode
+  );
+
+  const payload = {
+    companyName:
+      v.company.value.selected_option.value,
+
+    plantCode,
+    plantName: plant.plantName,
+    location: plant.location,
+
+    billMonth:
+      v.bill_month.value.selected_date,
+
+    contractorName:
+      v.contractor.value.value,
+
+    noOfEmployees:
+      Number(v.no_of_emp.value.value),
+
+    mode:
+      v.mode.value.selected_option.value,
+
+    invoices: [
+      {
+        invoiceNo:
+          v.invoice_no.value.value,
+        invoiceDate:
+          v.invoice_date.value.selected_date,
+        amount:
+          v.amount.value.value,
+        total:
+          v.amount.value.value
+      }
+    ]
+  };
+
+  console.log("✅ FINAL BILL PAYLOAD", payload);
+
+  // 👉 yahin tum createBill(payload) call kar sakte ho
 });
 
 
