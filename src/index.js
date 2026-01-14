@@ -1,3 +1,7 @@
+
+
+
+
 // import "dotenv/config";
 // import express from "express";
 // import pkg from "@slack/bolt";
@@ -180,6 +184,9 @@
 //   }
 // });
 
+
+
+
 // const PLANTS = [
 //   {
 //     company: "LUMAX AUTO TECH LTD",
@@ -194,6 +201,11 @@
 //     location: "Chakan"
 //   }
 // ];
+
+
+
+
+
 
 // app.command("/invoice", async ({ ack, body, client }) => {
 //   await ack();
@@ -327,6 +339,11 @@
 //   });
 // });
 
+
+
+
+
+
 // const buildInvoiceModal = (plantCode = "", plantName = "") => ({
 //   type: "modal",
 //   callback_id: "invoice_modal",
@@ -368,6 +385,7 @@
 //   ]
 // });
 
+
 import "dotenv/config";
 import express from "express";
 import pkg from "@slack/bolt";
@@ -406,6 +424,7 @@ const receiver = new ExpressReceiver({
   clientSecret: process.env.SLACK_CLIENT_SECRET,
   stateSecret: process.env.SESSION_SECRET || "slack-secret",
   scopes: ["commands", "chat:write"],
+
   installerOptions: {
     redirectUriPath: "/slack/oauth_redirect",
     stateVerification: false,
@@ -420,7 +439,11 @@ const receiver = new ExpressReceiver({
         ON CONFLICT (team_id)
         DO UPDATE SET bot_token = EXCLUDED.bot_token
         `,
-        [installation.team.id, installation.team.name, installation.bot.token]
+        [
+          installation.team.id,
+          installation.team.name,
+          installation.bot.token,
+        ]
       );
     },
 
@@ -477,13 +500,13 @@ const PLANTS = [
 ];
 
 /* ----------------------------------
-   🧱 MODAL BUILDER (FIXED)
+   🧱 MODAL 1 – SELECT PLANT
 ---------------------------------- */
-const buildInvoiceModal = (values = {}, plant = null) => ({
+const buildPlantSelectModal = () => ({
   type: "modal",
-  callback_id: "invoice_modal",
-  title: { type: "plain_text", text: "Create Invoice" },
-  submit: { type: "plain_text", text: "Submit" },
+  callback_id: "plant_select_modal",
+  title: { type: "plain_text", text: "Select Plant" },
+  submit: { type: "plain_text", text: "Next" },
 
   blocks: [
     {
@@ -499,10 +522,8 @@ const buildInvoiceModal = (values = {}, plant = null) => ({
             value: "LUMAX AUTO TECH LTD",
           },
         ],
-        initial_option: values.company?.company_select?.selected_option,
       },
     },
-
     {
       type: "input",
       block_id: "plant",
@@ -514,56 +535,59 @@ const buildInvoiceModal = (values = {}, plant = null) => ({
           text: { type: "plain_text", text: p.plantCode },
           value: p.plantCode,
         })),
-        initial_option: plant
-          ? {
-              text: { type: "plain_text", text: plant.plantCode },
-              value: plant.plantCode,
-            }
-          : values.plant?.plant_select?.selected_option,
+      },
+    },
+  ],
+});
+
+/* ----------------------------------
+   🧱 MODAL 2 – INVOICE (SHOWS PLANT NAME)
+---------------------------------- */
+const buildInvoiceModal = (plant) => ({
+  type: "modal",
+  callback_id: "invoice_modal",
+  title: { type: "plain_text", text: "Create Invoice" },
+  submit: { type: "plain_text", text: "Submit" },
+
+  private_metadata: JSON.stringify({
+    plantCode: plant.plantCode,
+  }),
+
+  blocks: [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Company:* ${plant.company}
+*Plant Code:* ${plant.plantCode}
+*Plant Name:* ${plant.plantName}
+*Location:* ${plant.location}`,
       },
     },
 
-    /* ✅ READ-ONLY AUTO FILLED PLANT NAME */
     {
-      type: "section",
-      block_id: `plant_name_${plant?.plantCode || "empty"}`,
-      text: {
-        type: "mrkdwn",
-        text: `*Plant Name*\n${plant?.plantName || "_Select plant code_"}`,
-      },
+      type: "divider",
     },
 
     {
       type: "input",
       block_id: "bill_month",
       label: { type: "plain_text", text: "Bill Month" },
-      element: {
-        type: "datepicker",
-        action_id: "value",
-        initial_date: values.bill_month?.value?.selected_date,
-      },
+      element: { type: "datepicker", action_id: "value" },
     },
 
     {
       type: "input",
       block_id: "invoice_no",
       label: { type: "plain_text", text: "Invoice No" },
-      element: {
-        type: "plain_text_input",
-        action_id: "value",
-        initial_value: values.invoice_no?.value?.value || "",
-      },
+      element: { type: "plain_text_input", action_id: "value" },
     },
 
     {
       type: "input",
       block_id: "amount",
       label: { type: "plain_text", text: "Amount (INR)" },
-      element: {
-        type: "plain_text_input",
-        action_id: "value",
-        initial_value: values.amount?.value?.value || "",
-      },
+      element: { type: "plain_text_input", action_id: "value" },
     },
   ],
 });
@@ -576,38 +600,40 @@ app.command("/invoice", async ({ ack, body, client }) => {
 
   await client.views.open({
     trigger_id: body.trigger_id,
-    view: buildInvoiceModal(),
+    view: buildPlantSelectModal(),
   });
 });
 
 /* ----------------------------------
-   🔁 PLANT SELECT → AUTO FILL NAME
+   🔁 MODAL 1 SUBMIT → OPEN MODAL 2
 ---------------------------------- */
-app.action("plant_select", async ({ ack, body, client }) => {
+app.view("plant_select_modal", async ({ ack, view, body, client }) => {
   await ack();
 
-  const plantCode = body.actions[0].selected_option.value;
+  const plantCode =
+    view.state.values.plant.plant_select.selected_option.value;
+
   const plant = PLANTS.find((p) => p.plantCode === plantCode);
 
-  await client.views.update({
-    view_id: body.view.id,
-    hash: body.view.hash,
-    view: buildInvoiceModal(body.view.state.values, plant),
+  await client.views.open({
+    trigger_id: body.trigger_id,
+    view: buildInvoiceModal(plant),
   });
 });
 
 /* ----------------------------------
-   ✅ MODAL SUBMIT
+   ✅ FINAL SUBMIT
 ---------------------------------- */
 app.view("invoice_modal", async ({ ack, view, body }) => {
   await ack();
 
-  const v = view.state.values;
-  const plantCode = v.plant.plant_select.selected_option.value;
+  const { plantCode } = JSON.parse(view.private_metadata);
   const plant = PLANTS.find((p) => p.plantCode === plantCode);
 
+  const v = view.state.values;
+
   const payload = {
-    company: v.company.company_select.selected_option.value,
+    company: plant.company,
     plantCode,
     plantName: plant.plantName,
     location: plant.location,
