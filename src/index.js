@@ -465,97 +465,105 @@ slackApp.command("/invoice", async ({ ack, body, client }) => {
 slackApp.action("add_invoice", async ({ ack, body, client }) => {
   await ack();
 
-  const v = body.view.state.values;
-  const invoiceRows = [];
-  let idx = 0;
-  while (v[`invoiceNo_${idx}`]) {
-    invoiceRows.push({
-      invoiceNo: v[`invoiceNo_${idx}`].invoiceNo.value,
-      invoiceDate: v[`invoiceDate_${idx}`].invoiceDate.selected_date || "",
-      invoiceType: v[`invoiceType_${idx}`].invoiceType.selected_option?.value || "",
-      amount: v[`amount_${idx}`].amount.value || "",
-      serviceCharge: v[`serviceCharge_${idx}`].serviceCharge.value || "",
-      esi: v[`esi_${idx}`].esi.value || "",
-      pf: v[`pf_${idx}`].pf.value || "",
-      pt: v[`pt_${idx}`].pt.value || "",
-      lwf: v[`lwf_${idx}`].lwf.value || "",
-      total: v[`total_${idx}`].total.value || "",
-      remarks: v[`remarks_${idx}`].remarks.value || "",
-      fileUrl: v[`fileUrl_${idx}`].fileUrl.value || "",
-    });
-    idx++;
-  }
+  try {
+    const v = body.view.state.values;
+    const invoiceRows = [];
+    let idx = 0;
+    while (v[`invoiceNo_${idx}`]) {
+      invoiceRows.push({
+        invoiceNo: v[`invoiceNo_${idx}`].invoiceNo?.value || "",
+        invoiceDate: v[`invoiceDate_${idx}`].invoiceDate?.selected_date || "",
+        invoiceType: v[`invoiceType_${idx}`].invoiceType?.selected_option?.value || "",
+        amount: v[`amount_${idx}`].amount?.value || "",
+        serviceCharge: v[`serviceCharge_${idx}`].serviceCharge?.value || "",
+        esi: v[`esi_${idx}`].esi?.value || "",
+        pf: v[`pf_${idx}`].pf?.value || "",
+        pt: v[`pt_${idx}`].pt?.value || "",
+        lwf: v[`lwf_${idx}`].lwf?.value || "",
+        total: v[`total_${idx}`].total?.value || "",
+        remarks: v[`remarks_${idx}`].remarks?.value || "",
+        fileUrl: v[`fileUrl_${idx}`].fileUrl?.value || "",
+      });
+      idx++;
+    }
 
-  invoiceRows.push({}); // add empty row
-  await client.views.update({ view_id: body.view.id, hash: body.view.hash, view: buildInvoiceModal(invoiceRows) });
+    invoiceRows.push({}); // add empty row
+    await client.views.update({ view_id: body.view.id, hash: body.view.hash, view: buildInvoiceModal(invoiceRows) });
+  } catch (err) {
+    console.error("❌ Error adding invoice row:", err);
+    await client.chat.postMessage({ channel: body.user.id, text: `❌ Error adding invoice row: ${err.message}` });
+  }
 });
 
 // MODAL SUBMIT
 slackApp.view("invoice_modal", async ({ ack, view, body, client }) => {
-  await ack(); // ✅ always first
+  await ack();
 
-  const v = view.state.values;
-
-  // Extract invoice rows dynamically
-  const invoiceRows = [];
-  let idx = 0;
-  while (v[`invoiceNo_${idx}`]) {
-    invoiceRows.push({
-      invoiceNo: v[`invoiceNo_${idx}`].invoiceNo.value,
-      invoiceDate: v[`invoiceDate_${idx}`].invoiceDate.selected_date,
-      invoiceType: v[`invoiceType_${idx}`].invoiceType.selected_option?.value || "",
-      amount: Number(v[`amount_${idx}`].amount.value),
-      serviceCharge: Number(v[`serviceCharge_${idx}`].serviceCharge.value),
-      esi: Number(v[`esi_${idx}`].esi.value),
-      pf: Number(v[`pf_${idx}`].pf.value),
-      pt: Number(v[`pt_${idx}`].pt.value),
-      lwf: Number(v[`lwf_${idx}`].lwf.value),
-      total: Number(v[`total_${idx}`].total.value),
-      remarks: v[`remarks_${idx}`].remarks.value,
-      fileUrl: v[`fileUrl_${idx}`].fileUrl.value
-    });
-    idx++;
-  }
-
-  // Extract bill-level fields
-  const payload = {
-    companyName: v.company.company_select.selected_option.value,
-    plantCode: v.plant.plant_select.selected_option.value,
-    plantName: v.plant_name.plant_name_input.value,
-    location: PLANTS.find(p => p.plantCode === v.plant.plant_select.selected_option.value)?.location,
-    billMonth: v.bill_month.billMonth.selected_date,
-    contractorName: v.contractor_name.contractorName.value,
-    noOfEmployees: Number(v.no_of_employees.noOfEmployees.value),
-    mode: v.mode.mode.selected_option.value,
-    areaOfWork: v.area_of_work.areaOfWork.value,
-    maxEmployeesPerRC: Number(v.max_employees_per_rc.maxEmployeesPerRC.value),
-    invoices: invoiceRows,
-    createdBy: body.user.id
-  };
-
-  console.log("Payload to API:", payload);
-
-  // Submit to your API
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/bill`, {
+    const v = view.state.values;
+    console.log("Slack view submission:", JSON.stringify(v, null, 2));
+
+    // Extract invoice rows
+    const invoiceRows = [];
+    let idx = 0;
+    while (v[`invoiceNo_${idx}`]) {
+      invoiceRows.push({
+        invoiceNo: v[`invoiceNo_${idx}`].invoiceNo?.value || "",
+        invoiceDate: v[`invoiceDate_${idx}`].invoiceDate?.selected_date || "",
+        invoiceType: v[`invoiceType_${idx}`].invoiceType?.selected_option?.value || "",
+        amount: Number(v[`amount_${idx}`].amount?.value || 0),
+        serviceCharge: Number(v[`serviceCharge_${idx}`].serviceCharge?.value || 0),
+        esi: Number(v[`esi_${idx}`].esi?.value || 0),
+        pf: Number(v[`pf_${idx}`].pf?.value || 0),
+        pt: Number(v[`pt_${idx}`].pt?.value || 0),
+        lwf: Number(v[`lwf_${idx}`].lwf?.value || 0),
+        total: Number(v[`total_${idx}`].total?.value || 0),
+        remarks: v[`remarks_${idx}`].remarks?.value || "",
+        fileUrl: v[`fileUrl_${idx}`].fileUrl?.value || ""
+      });
+      idx++;
+    }
+
+    // Build payload safely
+    const payload = {
+      companyName: v.company.company_select?.selected_option?.value || "",
+      plantCode: v.plant.plant_select?.selected_option?.value || "",
+      plantName: v.plant_name.plant_name_input?.value || "",
+      location: PLANTS.find(p => p.plantCode === v.plant.plant_select?.selected_option?.value)?.location || "",
+      billMonth: v.bill_month.billMonth?.selected_date || "",
+      contractorName: v.contractor_name.contractorName?.value || "",
+      noOfEmployees: Number(v.no_of_employees.noOfEmployees?.value || 0),
+      mode: v.mode.mode?.selected_option?.value || "",
+      areaOfWork: v.area_of_work.areaOfWork?.value || "",
+      maxEmployeesPerRC: Number(v.max_employees_per_rc.maxEmployeesPerRC?.value || 0),
+      invoices: invoiceRows,
+      createdBy: body.user.id
+    };
+
+    console.log("Payload to API:", JSON.stringify(payload, null, 2));
+
+    // Submit to API
+    const apiUrl = process.env.BASE_URL || "http://localhost:3000";
+    const res = await fetch(`${apiUrl}/api/bill`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
 
+    const resText = await res.text();
     if (!res.ok) {
-      const errText = await res.text();
-      console.error("API Error:", errText);
-      await client.chat.postMessage({ channel: body.user.id, text: "❌ Failed to create bill. Check logs." });
+      console.error("❌ API Error Response:", resText);
+      await client.chat.postMessage({ channel: body.user.id, text: `❌ Failed to create bill. API responded: ${resText}` });
     } else {
+      console.log("✅ API Success Response:", resText);
       await client.chat.postMessage({ channel: body.user.id, text: "✅ Bill created successfully!" });
     }
+
   } catch (err) {
-    console.error("Fetch Error:", err);
-    await client.chat.postMessage({ channel: body.user.id, text: "❌ Failed to connect to API." });
+    console.error("❌ Error in view_submission:", err);
+    await client.chat.postMessage({ channel: body.user.id, text: `❌ Error processing your request: ${err.message}` });
   }
 });
-
 
 /* ----------------------------------
    ✅ EXPORT SERVERLESS HANDLER
