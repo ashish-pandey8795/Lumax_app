@@ -1,9 +1,12 @@
 import "dotenv/config";
-import { App, ExpressReceiver } from "@slack/bolt";
 import cors from "cors";
 import bodyParser from "body-parser";
 import { Pool } from "pg";
 import billRoutes from "./routes/bill.routes.js";
+
+// ✅ Correct Slack Bolt import for CommonJS package
+import pkg from "@slack/bolt";
+const { App, ExpressReceiver } = pkg;
 
 /* ----------------------------------
    🗄️ DATABASE
