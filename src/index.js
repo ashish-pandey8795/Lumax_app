@@ -309,7 +309,9 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
-import { App, ExpressReceiver } from "@slack/bolt";
+
+import pkg from "@slack/bolt";
+const { App, ExpressReceiver } = pkg;
 
 import { pool, initDb } from "./db/index.js";
 import billRoutes from "./routes/bill.routes.js";
