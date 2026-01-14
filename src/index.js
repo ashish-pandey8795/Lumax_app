@@ -644,7 +644,7 @@ slackApp.command("/invoice", async ({ ack, body, client }) => {
 });
 
 // NEW: OPEN STUDENT MODAL VIA /invoice STUDENT (or another slash command)
-slackApp.command("/student", async ({ ack, body, client }) => {
+slackApp.command("/invoice", async ({ ack, body, client }) => {
   await ack();
   await client.views.open({ trigger_id: body.trigger_id, view: buildStudentModal() });
 });
