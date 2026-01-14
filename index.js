@@ -1,4 +1,5 @@
 require("dotenv").config();
+import express from "express";
 const { App, ExpressReceiver } = require("@slack/bolt");
 
 /* -------------------------------------------------------
