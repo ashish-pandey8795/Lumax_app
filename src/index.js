@@ -10,11 +10,11 @@ import { createStudent } from "./controllers/student.controller.js";
 const { App, ExpressReceiver } = pkg;
 
 
-SUBJECTS = [
+const SUBJECTS = [
   { code: "CS101", name: "Computer Science Basics" },
   { code: "MA101", name: "Mathematics I" },
   { code: "PH101", name: "Physics I" },
-]
+];
 /* ----------------------------------
    🌱 PLANTS
 ---------------------------------- */
