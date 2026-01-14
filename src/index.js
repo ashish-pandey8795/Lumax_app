@@ -57,7 +57,7 @@ const app = new App({ receiver, processBeforeResponse: true });
    🧱 MODAL BUILDER
 ---------------------------------- */
 
-const buildStudentModal = (subjectCode = "", subjectName = "") => ({
+const buildStudentModal = () => ({
   type: "modal",
   callback_id: "student_register_modal",
   title: { type: "plain_text", text: "Register Student" },
@@ -67,25 +67,24 @@ const buildStudentModal = (subjectCode = "", subjectName = "") => ({
     {
       type: "input",
       block_id: "student_name",
-      label: { type: "plain_text", text: "Student Name" },
       element: {
         type: "plain_text_input",
         action_id: "student_name_input",
       },
+      label: { type: "plain_text", text: "Student Name" },
     },
     {
       type: "input",
       block_id: "roll_no",
-      label: { type: "plain_text", text: "Roll Number" },
       element: {
         type: "plain_text_input",
         action_id: "roll_no_input",
       },
+      label: { type: "plain_text", text: "Roll Number" },
     },
     {
       type: "input",
       block_id: "subject_code",
-      label: { type: "plain_text", text: "Subject Code" },
       element: {
         type: "static_select",
         action_id: "subject_code_select",
@@ -94,19 +93,20 @@ const buildStudentModal = (subjectCode = "", subjectName = "") => ({
           value: s.code,
         })),
       },
+      label: { type: "plain_text", text: "Subject Code" },
     },
     {
       type: "input",
       block_id: "subject_name",
-      label: { type: "plain_text", text: "Subject Name" },
       element: {
         type: "plain_text_input",
         action_id: "subject_name_input",
-        initial_value: subjectName,
       },
+      label: { type: "plain_text", text: "Subject Name" },
     },
   ],
 });
+
 
 const buildInvoiceModal = (plantCode = "", plantName = "") => {
   const initialPlant = PLANTS.find((p) => p.plantCode === plantCode);
@@ -211,6 +211,7 @@ app.command("/invoice", async ({ ack, body, client }) => {
 });
 
 
+
 // app.command("/invoice", async ({ ack, body, client }) => {
 //   await ack();
 //   await client.views.open({
@@ -248,33 +249,36 @@ app.action("plant_select", async ({ ack, body, client, action, view }) => {
   });
 });
 
-app.action("subject_code_select", async ({ ack, body, action, client, view }) => {
+app.action("subject_code_select", async ({ ack, body, action, client }) => {
   await ack();
 
   const selectedCode = action.selected_option.value;
   const subject = SUBJECTS.find(s => s.code === selectedCode);
   if (!subject) return;
 
-  const updatedBlocks = view.blocks.map(block => {
-    if (block.block_id === "subject_name") {
-      return {
-        ...block,
-        element: {
-          ...block.element,
-          initial_value: subject.name,
-        },
-      };
-    }
-    return block;
-  });
+  const view = body.view;
+
+  const updatedView = {
+    ...view,
+    blocks: view.blocks.map(block => {
+      if (block.block_id === "subject_name") {
+        return {
+          ...block,
+          element: {
+            type: "plain_text_input",
+            action_id: "subject_name_input",
+            initial_value: subject.name, // ✅ allowed only if replacing entire element
+          },
+        };
+      }
+      return block;
+    }),
+  };
 
   await client.views.update({
     view_id: view.id,
     hash: view.hash,
-    view: {
-      ...view,
-      blocks: updatedBlocks,
-    },
+    view: updatedView,
   });
 });
 
