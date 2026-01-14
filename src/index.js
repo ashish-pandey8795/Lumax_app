@@ -315,7 +315,11 @@ import fetch from "node-fetch";
 
 import billRoutes from "./routes/bill.routes.js";
 
-const { App, ExpressReceiver } = pkg;
+import { App, ExpressReceiver } from "@slack/bolt";
+
+
+export default receiver.app; // <-- this is your serverless handler
+
 const { Pool } = pg;
 
 /* ----------------------------------
