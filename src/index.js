@@ -500,13 +500,14 @@ const PLANTS = [
 ];
 
 /* ----------------------------------
-   🧱 MODAL 1 – SELECT PLANT
+   🧱 MODAL BUILDER (CLEAN & SAFE)
 ---------------------------------- */
-const buildPlantSelectModal = () => ({
+const buildInvoiceModal = () => ({
   type: "modal",
-  callback_id: "plant_select_modal",
-  title: { type: "plain_text", text: "Select Plant" },
-  submit: { type: "plain_text", text: "Next" },
+  callback_id: "invoice_modal",
+  title: { type: "plain_text", text: "Create Invoice" },
+  submit: { type: "plain_text", text: "Submit" },
+  close: { type: "plain_text", text: "Cancel" },
 
   blocks: [
     {
@@ -524,6 +525,7 @@ const buildPlantSelectModal = () => ({
         ],
       },
     },
+
     {
       type: "input",
       block_id: "plant",
@@ -537,57 +539,35 @@ const buildPlantSelectModal = () => ({
         })),
       },
     },
-  ],
-});
-
-/* ----------------------------------
-   🧱 MODAL 2 – INVOICE (SHOWS PLANT NAME)
----------------------------------- */
-const buildInvoiceModal = (plant) => ({
-  type: "modal",
-  callback_id: "invoice_modal",
-  title: { type: "plain_text", text: "Create Invoice" },
-  submit: { type: "plain_text", text: "Submit" },
-
-  private_metadata: JSON.stringify({
-    plantCode: plant.plantCode,
-  }),
-
-  blocks: [
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*Company:* ${plant.company}
-*Plant Code:* ${plant.plantCode}
-*Plant Name:* ${plant.plantName}
-*Location:* ${plant.location}`,
-      },
-    },
-
-    {
-      type: "divider",
-    },
 
     {
       type: "input",
       block_id: "bill_month",
       label: { type: "plain_text", text: "Bill Month" },
-      element: { type: "datepicker", action_id: "value" },
+      element: {
+        type: "datepicker",
+        action_id: "value",
+      },
     },
 
     {
       type: "input",
       block_id: "invoice_no",
       label: { type: "plain_text", text: "Invoice No" },
-      element: { type: "plain_text_input", action_id: "value" },
+      element: {
+        type: "plain_text_input",
+        action_id: "value",
+      },
     },
 
     {
       type: "input",
       block_id: "amount",
       label: { type: "plain_text", text: "Amount (INR)" },
-      element: { type: "plain_text_input", action_id: "value" },
+      element: {
+        type: "plain_text_input",
+        action_id: "value",
+      },
     },
   ],
 });
@@ -600,40 +580,23 @@ app.command("/invoice", async ({ ack, body, client }) => {
 
   await client.views.open({
     trigger_id: body.trigger_id,
-    view: buildPlantSelectModal(),
+    view: buildInvoiceModal(),
   });
 });
 
 /* ----------------------------------
-   🔁 MODAL 1 SUBMIT → OPEN MODAL 2
----------------------------------- */
-app.view("plant_select_modal", async ({ ack, view, body, client }) => {
-  await ack();
-
-  const plantCode =
-    view.state.values.plant.plant_select.selected_option.value;
-
-  const plant = PLANTS.find((p) => p.plantCode === plantCode);
-
-  await client.views.open({
-    trigger_id: body.trigger_id,
-    view: buildInvoiceModal(plant),
-  });
-});
-
-/* ----------------------------------
-   ✅ FINAL SUBMIT
+   ✅ MODAL SUBMIT (AUTO DERIVE PLANT NAME)
 ---------------------------------- */
 app.view("invoice_modal", async ({ ack, view, body }) => {
   await ack();
 
-  const { plantCode } = JSON.parse(view.private_metadata);
-  const plant = PLANTS.find((p) => p.plantCode === plantCode);
-
   const v = view.state.values;
 
+  const plantCode = v.plant.plant_select.selected_option.value;
+  const plant = PLANTS.find((p) => p.plantCode === plantCode);
+
   const payload = {
-    company: plant.company,
+    company: v.company.company_select.selected_option.value,
     plantCode,
     plantName: plant.plantName,
     location: plant.location,
