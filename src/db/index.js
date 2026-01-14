@@ -55,6 +55,17 @@ export const initDb = async () => {
       );
     `);
 
+    await pool.query(`
+  CREATE TABLE IF NOT EXISTS students (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_name TEXT NOT NULL,
+    roll_no TEXT NOT NULL,
+    subject_code TEXT NOT NULL,
+    subject_name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+`);
+
     dbInitialized = true;
     console.log("✅ Database tables ready");
   } catch (error) {

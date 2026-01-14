@@ -5,8 +5,16 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import { pool, initDb } from "./db/index.js"; // your new DB module
 import pkg from "@slack/bolt";
+
+import { createStudent } from "./controllers/student.controller.js";
 const { App, ExpressReceiver } = pkg;
 
+
+SUBJECTS = [
+  { code: "CS101", name: "Computer Science Basics" },
+  { code: "MA101", name: "Mathematics I" },
+  { code: "PH101", name: "Physics I" },
+]
 /* ----------------------------------
    🌱 PLANTS
 ---------------------------------- */
@@ -48,6 +56,58 @@ const app = new App({ receiver, processBeforeResponse: true });
 /* ----------------------------------
    🧱 MODAL BUILDER
 ---------------------------------- */
+
+const buildStudentModal = (subjectCode = "", subjectName = "") => ({
+  type: "modal",
+  callback_id: "student_register_modal",
+  title: { type: "plain_text", text: "Register Student" },
+  submit: { type: "plain_text", text: "Save" },
+  close: { type: "plain_text", text: "Cancel" },
+  blocks: [
+    {
+      type: "input",
+      block_id: "student_name",
+      label: { type: "plain_text", text: "Student Name" },
+      element: {
+        type: "plain_text_input",
+        action_id: "student_name_input",
+      },
+    },
+    {
+      type: "input",
+      block_id: "roll_no",
+      label: { type: "plain_text", text: "Roll Number" },
+      element: {
+        type: "plain_text_input",
+        action_id: "roll_no_input",
+      },
+    },
+    {
+      type: "input",
+      block_id: "subject_code",
+      label: { type: "plain_text", text: "Subject Code" },
+      element: {
+        type: "static_select",
+        action_id: "subject_code_select",
+        options: SUBJECTS.map(s => ({
+          text: { type: "plain_text", text: s.code },
+          value: s.code,
+        })),
+      },
+    },
+    {
+      type: "input",
+      block_id: "subject_name",
+      label: { type: "plain_text", text: "Subject Name" },
+      element: {
+        type: "plain_text_input",
+        action_id: "subject_name_input",
+        initial_value: subjectName,
+      },
+    },
+  ],
+});
+
 const buildInvoiceModal = (plantCode = "", plantName = "") => {
   const initialPlant = PLANTS.find((p) => p.plantCode === plantCode);
 
@@ -141,13 +201,23 @@ const buildInvoiceModal = (plantCode = "", plantName = "") => {
 /* ----------------------------------
    ⚡ /invoice COMMAND
 ---------------------------------- */
+
 app.command("/invoice", async ({ ack, body, client }) => {
   await ack();
   await client.views.open({
     trigger_id: body.trigger_id,
-    view: buildInvoiceModal(),
+    view: buildStudentModal(),
   });
 });
+
+
+// app.command("/invoice", async ({ ack, body, client }) => {
+//   await ack();
+//   await client.views.open({
+//     trigger_id: body.trigger_id,
+//     view: buildInvoiceModal(),
+//   });
+// });
 
 /* ----------------------------------
    ⚡ PLANT SELECT AUTO-FILL
@@ -177,6 +247,37 @@ app.action("plant_select", async ({ ack, body, client, action, view }) => {
     view: { ...view, blocks: updatedBlocks },
   });
 });
+
+app.action("subject_code_select", async ({ ack, body, action, client, view }) => {
+  await ack();
+
+  const selectedCode = action.selected_option.value;
+  const subject = SUBJECTS.find(s => s.code === selectedCode);
+  if (!subject) return;
+
+  const updatedBlocks = view.blocks.map(block => {
+    if (block.block_id === "subject_name") {
+      return {
+        ...block,
+        element: {
+          ...block.element,
+          initial_value: subject.name,
+        },
+      };
+    }
+    return block;
+  });
+
+  await client.views.update({
+    view_id: view.id,
+    hash: view.hash,
+    view: {
+      ...view,
+      blocks: updatedBlocks,
+    },
+  });
+});
+
 
 /* ----------------------------------
    ⚡ MODAL SUBMIT
@@ -227,6 +328,22 @@ app.view("invoice_modal", async ({ ack, view, body }) => {
     console.error("❌ Error saving bill request:", err.message);
   }
 });
+
+app.view("student_register_modal", async ({ ack, view }) => {
+  await ack();
+
+  const v = view.state.values;
+
+  await createStudent({
+    studentName: v.student_name.student_name_input.value,
+    rollNo: v.roll_no.roll_no_input.value,
+    subjectCode: v.subject_code.subject_code_select.selected_option.value,
+    subjectName: v.subject_name.subject_name_input.value,
+  });
+
+  console.log("✅ Student registered");
+});
+
 
 /* ----------------------------------
    🌱 INIT DB ON START
