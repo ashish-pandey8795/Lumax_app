@@ -9,6 +9,7 @@
 // import bodyParser from "body-parser";
 // import pg from "pg";
 
+
 // const { App, ExpressReceiver } = pkg;
 // const { Pool } = pg;
 
@@ -407,6 +408,117 @@ app.event("app_home_opened", async ({ event, client }) => {
     console.error("❌ App Home error:", err);
   }
 });
+
+
+
+
+app.command("/invoice", async ({ ack, body, client }) => {
+  await ack();
+
+  await client.views.open({
+    trigger_id: body.trigger_id,
+    view: {
+      type: "modal",
+      callback_id: "invoice_modal",
+      title: {
+        type: "plain_text",
+        text: "Create Invoice",
+      },
+      submit: {
+        type: "plain_text",
+        text: "Submit",
+      },
+      close: {
+        type: "plain_text",
+        text: "Cancel",
+      },
+      blocks: [
+        {
+          type: "input",
+          block_id: "invoice_no",
+          label: {
+            type: "plain_text",
+            text: "Invoice Number",
+          },
+          element: {
+            type: "plain_text_input",
+            action_id: "value",
+            placeholder: {
+              type: "plain_text",
+              text: "INV-001",
+            },
+          },
+        },
+        {
+          type: "input",
+          block_id: "amount",
+          label: {
+            type: "plain_text",
+            text: "Amount",
+          },
+          element: {
+            type: "plain_text_input",
+            action_id: "value",
+            placeholder: {
+              type: "plain_text",
+              text: "1000",
+            },
+          },
+        },
+        {
+          type: "input",
+          block_id: "description",
+          optional: true,
+          label: {
+            type: "plain_text",
+            text: "Description",
+          },
+          element: {
+            type: "plain_text_input",
+            action_id: "value",
+            multiline: true,
+          },
+        },
+      ],
+    },
+  });
+});
+
+
+
+
+app.view("invoice_modal", async ({ ack, body, view }) => {
+  await ack();
+
+  const values = view.state.values;
+
+  const invoiceNo = values.invoice_no.value.value;
+  const amount = values.amount.value.value;
+  const description = values.description?.value?.value || "";
+
+  console.log("🧾 Invoice Created:", {
+    invoiceNo,
+    amount,
+    description,
+    user: body.user.id,
+    team: body.team.id,
+  });
+});
+
+
+app.command("/invoice", ({ body }) => {
+  console.log("🔥 Slash command triggered by:", body.user_id);
+});
+
+
+
+
+
+
+
+
+
+
 
 /* ----------------------------------
    🚀 START SERVER
