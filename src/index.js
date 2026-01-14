@@ -471,27 +471,26 @@ slackApp.action("add_invoice", async ({ ack, body, client }) => {
     let idx = 0;
     while (v[`invoiceNo_${idx}`]) {
       invoiceRows.push({
-        invoiceNo: v[`invoiceNo_${idx}`].invoiceNo?.value || "",
-        invoiceDate: v[`invoiceDate_${idx}`].invoiceDate?.selected_date || "",
-        invoiceType: v[`invoiceType_${idx}`].invoiceType?.selected_option?.value || "",
-        amount: v[`amount_${idx}`].amount?.value || "",
-        serviceCharge: v[`serviceCharge_${idx}`].serviceCharge?.value || "",
-        esi: v[`esi_${idx}`].esi?.value || "",
-        pf: v[`pf_${idx}`].pf?.value || "",
-        pt: v[`pt_${idx}`].pt?.value || "",
-        lwf: v[`lwf_${idx}`].lwf?.value || "",
-        total: v[`total_${idx}`].total?.value || "",
-        remarks: v[`remarks_${idx}`].remarks?.value || "",
-        fileUrl: v[`fileUrl_${idx}`].fileUrl?.value || "",
+        invoiceNo: v[`invoiceNo_${idx}`]?.invoiceNo?.value || "",
+        invoiceDate: v[`invoiceDate_${idx}`]?.invoiceDate?.selected_date || "",
+        invoiceType: v[`invoiceType_${idx}`]?.invoiceType?.selected_option?.value || "",
+        amount: v[`amount_${idx}`]?.amount?.value || "",
+        serviceCharge: v[`serviceCharge_${idx}`]?.serviceCharge?.value || "",
+        esi: v[`esi_${idx}`]?.esi?.value || "",
+        pf: v[`pf_${idx}`]?.pf?.value || "",
+        pt: v[`pt_${idx}`]?.pt?.value || "",
+        lwf: v[`lwf_${idx}`]?.lwf?.value || "",
+        total: v[`total_${idx}`]?.total?.value || "",
+        remarks: v[`remarks_${idx}`]?.remarks?.value || "",
+        fileUrl: v[`fileUrl_${idx}`]?.fileUrl?.value || ""
       });
       idx++;
     }
-
     invoiceRows.push({}); // add empty row
     await client.views.update({ view_id: body.view.id, hash: body.view.hash, view: buildInvoiceModal(invoiceRows) });
   } catch (err) {
     console.error("❌ Error adding invoice row:", err);
-    await client.chat.postMessage({ channel: body.user.id, text: `❌ Error adding invoice row: ${err.message}` });
+    await client.chat.postMessage({ channel: body.user.id, text: `❌ Error adding new invoice row: ${err.message}` });
   }
 });
 
@@ -501,48 +500,48 @@ slackApp.view("invoice_modal", async ({ ack, view, body, client }) => {
 
   try {
     const v = view.state.values;
-    console.log("Slack view submission:", JSON.stringify(v, null, 2));
+    console.log("🔹 Slack modal payload:", JSON.stringify(v, null, 2));
 
     // Extract invoice rows
     const invoiceRows = [];
     let idx = 0;
     while (v[`invoiceNo_${idx}`]) {
       invoiceRows.push({
-        invoiceNo: v[`invoiceNo_${idx}`].invoiceNo?.value || "",
-        invoiceDate: v[`invoiceDate_${idx}`].invoiceDate?.selected_date || "",
-        invoiceType: v[`invoiceType_${idx}`].invoiceType?.selected_option?.value || "",
-        amount: Number(v[`amount_${idx}`].amount?.value || 0),
-        serviceCharge: Number(v[`serviceCharge_${idx}`].serviceCharge?.value || 0),
-        esi: Number(v[`esi_${idx}`].esi?.value || 0),
-        pf: Number(v[`pf_${idx}`].pf?.value || 0),
-        pt: Number(v[`pt_${idx}`].pt?.value || 0),
-        lwf: Number(v[`lwf_${idx}`].lwf?.value || 0),
-        total: Number(v[`total_${idx}`].total?.value || 0),
-        remarks: v[`remarks_${idx}`].remarks?.value || "",
-        fileUrl: v[`fileUrl_${idx}`].fileUrl?.value || ""
+        invoiceNo: v[`invoiceNo_${idx}`]?.invoiceNo?.value || "",
+        invoiceDate: v[`invoiceDate_${idx}`]?.invoiceDate?.selected_date || "",
+        invoiceType: v[`invoiceType_${idx}`]?.invoiceType?.selected_option?.value || "",
+        amount: Number(v[`amount_${idx}`]?.amount?.value || 0),
+        serviceCharge: Number(v[`serviceCharge_${idx}`]?.serviceCharge?.value || 0),
+        esi: Number(v[`esi_${idx}`]?.esi?.value || 0),
+        pf: Number(v[`pf_${idx}`]?.pf?.value || 0),
+        pt: Number(v[`pt_${idx}`]?.pt?.value || 0),
+        lwf: Number(v[`lwf_${idx}`]?.lwf?.value || 0),
+        total: Number(v[`total_${idx}`]?.total?.value || 0),
+        remarks: v[`remarks_${idx}`]?.remarks?.value || "",
+        fileUrl: v[`fileUrl_${idx}`]?.fileUrl?.value || ""
       });
       idx++;
     }
 
-    // Build payload safely
+    // Build payload
     const payload = {
-      companyName: v.company.company_select?.selected_option?.value || "",
-      plantCode: v.plant.plant_select?.selected_option?.value || "",
-      plantName: v.plant_name.plant_name_input?.value || "",
-      location: PLANTS.find(p => p.plantCode === v.plant.plant_select?.selected_option?.value)?.location || "",
-      billMonth: v.bill_month.billMonth?.selected_date || "",
-      contractorName: v.contractor_name.contractorName?.value || "",
-      noOfEmployees: Number(v.no_of_employees.noOfEmployees?.value || 0),
-      mode: v.mode.mode?.selected_option?.value || "",
-      areaOfWork: v.area_of_work.areaOfWork?.value || "",
-      maxEmployeesPerRC: Number(v.max_employees_per_rc.maxEmployeesPerRC?.value || 0),
+      companyName: v.company?.company_select?.selected_option?.value || "",
+      plantCode: v.plant?.plant_select?.selected_option?.value || "",
+      plantName: v.plant_name?.plant_name_input?.value || "",
+      location: PLANTS.find(p => p.plantCode === v.plant?.plant_select?.selected_option?.value)?.location || "",
+      billMonth: v.bill_month?.billMonth?.selected_date || "",
+      contractorName: v.contractor_name?.contractorName?.value || "",
+      noOfEmployees: Number(v.no_of_employees?.noOfEmployees?.value || 0),
+      mode: v.mode?.mode?.selected_option?.value || "",
+      areaOfWork: v.area_of_work?.areaOfWork?.value || "",
+      maxEmployeesPerRC: Number(v.max_employees_per_rc?.maxEmployeesPerRC?.value || 0),
       invoices: invoiceRows,
       createdBy: body.user.id
     };
 
-    console.log("Payload to API:", JSON.stringify(payload, null, 2));
+    console.log("🔹 Payload to API:", JSON.stringify(payload, null, 2));
 
-    // Submit to API
+    // Submit to backend API
     const apiUrl = process.env.BASE_URL || "http://localhost:3000";
     const res = await fetch(`${apiUrl}/api/bill`, {
       method: "POST",
@@ -560,8 +559,8 @@ slackApp.view("invoice_modal", async ({ ack, view, body, client }) => {
     }
 
   } catch (err) {
-    console.error("❌ Error in view_submission:", err);
-    await client.chat.postMessage({ channel: body.user.id, text: `❌ Error processing your request: ${err.message}` });
+    console.error("❌ Error processing Slack view submission:", err);
+    await client.chat.postMessage({ channel: body.user.id, text: `❌ Something went wrong: ${err.message}` });
   }
 });
 
