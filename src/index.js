@@ -458,8 +458,18 @@ const slackApp = new App({ receiver, processBeforeResponse: true });
 // Open modal command
 slackApp.command("/invoice", async ({ ack, body, client }) => {
   await ack();
-  await client.views.open({ trigger_id: body.trigger_id, view: buildInvoiceModal() });
+  console.log("Slash command triggered:", body.user_id, body.trigger_id);
+  try {
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: buildInvoiceModal()
+    });
+    console.log("Modal opened successfully");
+  } catch (err) {
+    console.error("Failed to open modal:", err.data || err);
+  }
 });
+
 
 // Auto-fill plant name
 slackApp.action("plant_select", async ({ ack, action, client, view }) => {
