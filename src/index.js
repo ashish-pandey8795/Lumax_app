@@ -385,86 +385,86 @@ const PLANTS = [
 /* ----------------------------------
    📄 BUILD INVOICE MODAL
 ---------------------------------- */
-const buildInvoiceModal = (invoiceRows = [], initialPlantName = "") => {
-  if (invoiceRows.length === 0) invoiceRows.push({});
+// const buildInvoiceModal = (invoiceRows = [], initialPlantName = "") => {
+//   if (invoiceRows.length === 0) invoiceRows.push({});
 
-  const invoiceBlocks = invoiceRows.flatMap((inv, idx) => [
-    { type: "header", text: { type: "plain_text", text: `Invoice #${idx + 1}` } },
-    { type: "input", block_id: `invoiceNo_${idx}`, label: { type: "plain_text", text: "Invoice No" },
-      element: { type: "plain_text_input", action_id: "invoiceNo", initial_value: inv.invoiceNo || "" } },
-    { type: "input", block_id: `invoiceDate_${idx}`, label: { type: "plain_text", text: "Invoice Date" },
-      element: { type: "datepicker", action_id: "invoiceDate", initial_date: inv.invoiceDate || undefined } },
-    { type: "input", block_id: `invoiceType_${idx}`, label: { type: "plain_text", text: "Invoice Type" },
-      element: {
-        type: "static_select",
-        action_id: "invoiceType",
-        initial_option: inv.invoiceType ? { text: { type: "plain_text", text: inv.invoiceType }, value: inv.invoiceType } : undefined,
-        options: [
-          { text: { type: "plain_text", text: "SERVICE" }, value: "SERVICE" },
-          { text: { type: "plain_text", text: "PRODUCT" }, value: "PRODUCT" }
-        ]
-      }
-    },
-    { type: "input", block_id: `amount_${idx}`, label: { type: "plain_text", text: "Amount" },
-      element: { type: "plain_text_input", action_id: "amount", initial_value: inv.amount || "" } },
-    { type: "input", block_id: `serviceCharge_${idx}`, label: { type: "plain_text", text: "Service Charge" },
-      element: { type: "plain_text_input", action_id: "serviceCharge", initial_value: inv.serviceCharge || "" } },
-    { type: "input", block_id: `esi_${idx}`, label: { type: "plain_text", text: "ESI" },
-      element: { type: "plain_text_input", action_id: "esi", initial_value: inv.esi || "" } },
-    { type: "input", block_id: `pf_${idx}`, label: { type: "plain_text", text: "PF" },
-      element: { type: "plain_text_input", action_id: "pf", initial_value: inv.pf || "" } },
-    { type: "input", block_id: `pt_${idx}`, label: { type: "plain_text", text: "PT" },
-      element: { type: "plain_text_input", action_id: "pt", initial_value: inv.pt || "" } },
-    { type: "input", block_id: `lwf_${idx}`, label: { type: "plain_text", text: "LWF" },
-      element: { type: "plain_text_input", action_id: "lwf", initial_value: inv.lwf || "" } },
-    { type: "input", block_id: `total_${idx}`, label: { type: "plain_text", text: "Total" },
-      element: { type: "plain_text_input", action_id: "total", initial_value: inv.total || "" } },
-    { type: "input", block_id: `remarks_${idx}`, label: { type: "plain_text", text: "Remarks" },
-      element: { type: "plain_text_input", action_id: "remarks", initial_value: inv.remarks || "" } },
-    { type: "input", block_id: `fileUrl_${idx}`, label: { type: "plain_text", text: "Invoice File URL" },
-      element: { type: "plain_text_input", action_id: "fileUrl", initial_value: inv.fileUrl || "" } }
-  ]);
+//   const invoiceBlocks = invoiceRows.flatMap((inv, idx) => [
+//     { type: "header", text: { type: "plain_text", text: `Invoice #${idx + 1}` } },
+//     { type: "input", block_id: `invoiceNo_${idx}`, label: { type: "plain_text", text: "Invoice No" },
+//       element: { type: "plain_text_input", action_id: "invoiceNo", initial_value: inv.invoiceNo || "" } },
+//     { type: "input", block_id: `invoiceDate_${idx}`, label: { type: "plain_text", text: "Invoice Date" },
+//       element: { type: "datepicker", action_id: "invoiceDate", initial_date: inv.invoiceDate || undefined } },
+//     { type: "input", block_id: `invoiceType_${idx}`, label: { type: "plain_text", text: "Invoice Type" },
+//       element: {
+//         type: "static_select",
+//         action_id: "invoiceType",
+//         initial_option: inv.invoiceType ? { text: { type: "plain_text", text: inv.invoiceType }, value: inv.invoiceType } : undefined,
+//         options: [
+//           { text: { type: "plain_text", text: "SERVICE" }, value: "SERVICE" },
+//           { text: { type: "plain_text", text: "PRODUCT" }, value: "PRODUCT" }
+//         ]
+//       }
+//     },
+//     { type: "input", block_id: `amount_${idx}`, label: { type: "plain_text", text: "Amount" },
+//       element: { type: "plain_text_input", action_id: "amount", initial_value: inv.amount || "" } },
+//     { type: "input", block_id: `serviceCharge_${idx}`, label: { type: "plain_text", text: "Service Charge" },
+//       element: { type: "plain_text_input", action_id: "serviceCharge", initial_value: inv.serviceCharge || "" } },
+//     { type: "input", block_id: `esi_${idx}`, label: { type: "plain_text", text: "ESI" },
+//       element: { type: "plain_text_input", action_id: "esi", initial_value: inv.esi || "" } },
+//     { type: "input", block_id: `pf_${idx}`, label: { type: "plain_text", text: "PF" },
+//       element: { type: "plain_text_input", action_id: "pf", initial_value: inv.pf || "" } },
+//     { type: "input", block_id: `pt_${idx}`, label: { type: "plain_text", text: "PT" },
+//       element: { type: "plain_text_input", action_id: "pt", initial_value: inv.pt || "" } },
+//     { type: "input", block_id: `lwf_${idx}`, label: { type: "plain_text", text: "LWF" },
+//       element: { type: "plain_text_input", action_id: "lwf", initial_value: inv.lwf || "" } },
+//     { type: "input", block_id: `total_${idx}`, label: { type: "plain_text", text: "Total" },
+//       element: { type: "plain_text_input", action_id: "total", initial_value: inv.total || "" } },
+//     { type: "input", block_id: `remarks_${idx}`, label: { type: "plain_text", text: "Remarks" },
+//       element: { type: "plain_text_input", action_id: "remarks", initial_value: inv.remarks || "" } },
+//     { type: "input", block_id: `fileUrl_${idx}`, label: { type: "plain_text", text: "Invoice File URL" },
+//       element: { type: "plain_text_input", action_id: "fileUrl", initial_value: inv.fileUrl || "" } }
+//   ]);
 
-  return {
-    type: "modal",
-    callback_id: "invoice_modal",
-    title: { type: "plain_text", text: "Create Invoice" },
-    submit: { type: "plain_text", text: "Submit" },
-    close: { type: "plain_text", text: "Cancel" },
-    blocks: [
-      { type: "input", block_id: "company", label: { type: "plain_text", text: "Company" },
-        element: { type: "static_select", action_id: "company_select",
-          options: [{ text: { type: "plain_text", text: "LUMAX AUTO TECH LTD" }, value: "LUMAX AUTO TECH LTD" }] } },
-      { type: "input", block_id: "plant", label: { type: "plain_text", text: "Plant Code" },
-        element: { type: "static_select", action_id: "plant_select",
-          options: PLANTS.map(p => ({ text: { type: "plain_text", text: p.plantCode }, value: p.plantCode })) } },
-      { type: "input", block_id: "plant_name", label: { type: "plain_text", text: "Plant Name" },
-        element: { type: "plain_text_input", action_id: "plant_name_input", initial_value: initialPlantName } },
-      { type: "input", block_id: "bill_month", label: { type: "plain_text", text: "Bill Month" },
-        element: { type: "datepicker", action_id: "billMonth" } },
-      { type: "input", block_id: "contractor_name", label: { type: "plain_text", text: "Contractor Name" },
-        element: { type: "plain_text_input", action_id: "contractorName" } },
-      { type: "input", block_id: "no_of_employees", label: { type: "plain_text", text: "No of Employees" },
-        element: { type: "plain_text_input", action_id: "noOfEmployees" } },
-      { type: "input", block_id: "mode", label: { type: "plain_text", text: "Mode" },
-        element: { type: "static_select", action_id: "mode",
-          options: [
-            { text: { type: "plain_text", text: "MONTHLY" }, value: "MONTHLY" },
-            { text: { type: "plain_text", text: "DAILY" }, value: "DAILY" }
-          ] } },
-      { type: "input", block_id: "area_of_work", label: { type: "plain_text", text: "Area of Work" },
-        element: { type: "plain_text_input", action_id: "areaOfWork" } },
-      { type: "input", block_id: "max_employees_per_rc", label: { type: "plain_text", text: "Max Employees Per RC" },
-        element: { type: "plain_text_input", action_id: "maxEmployeesPerRC" } },
-      ...invoiceBlocks,
-      {
-        type: "actions",
-        block_id: "add_invoice_btn",
-        elements: [{ type: "button", text: { type: "plain_text", text: "Add Invoice" }, action_id: "add_invoice" }]
-      }
-    ]
-  };
-};
+//   return {
+//     type: "modal",
+//     callback_id: "invoice_modal",
+//     title: { type: "plain_text", text: "Create Invoice" },
+//     submit: { type: "plain_text", text: "Submit" },
+//     close: { type: "plain_text", text: "Cancel" },
+//     blocks: [
+//       { type: "input", block_id: "company", label: { type: "plain_text", text: "Company" },
+//         element: { type: "static_select", action_id: "company_select",
+//           options: [{ text: { type: "plain_text", text: "LUMAX AUTO TECH LTD" }, value: "LUMAX AUTO TECH LTD" }] } },
+//       { type: "input", block_id: "plant", label: { type: "plain_text", text: "Plant Code" },
+//         element: { type: "static_select", action_id: "plant_select",
+//           options: PLANTS.map(p => ({ text: { type: "plain_text", text: p.plantCode }, value: p.plantCode })) } },
+//       { type: "input", block_id: "plant_name", label: { type: "plain_text", text: "Plant Name" },
+//         element: { type: "plain_text_input", action_id: "plant_name_input", initial_value: initialPlantName } },
+//       { type: "input", block_id: "bill_month", label: { type: "plain_text", text: "Bill Month" },
+//         element: { type: "datepicker", action_id: "billMonth" } },
+//       { type: "input", block_id: "contractor_name", label: { type: "plain_text", text: "Contractor Name" },
+//         element: { type: "plain_text_input", action_id: "contractorName" } },
+//       { type: "input", block_id: "no_of_employees", label: { type: "plain_text", text: "No of Employees" },
+//         element: { type: "plain_text_input", action_id: "noOfEmployees" } },
+//       { type: "input", block_id: "mode", label: { type: "plain_text", text: "Mode" },
+//         element: { type: "static_select", action_id: "mode",
+//           options: [
+//             { text: { type: "plain_text", text: "MONTHLY" }, value: "MONTHLY" },
+//             { text: { type: "plain_text", text: "DAILY" }, value: "DAILY" }
+//           ] } },
+//       { type: "input", block_id: "area_of_work", label: { type: "plain_text", text: "Area of Work" },
+//         element: { type: "plain_text_input", action_id: "areaOfWork" } },
+//       { type: "input", block_id: "max_employees_per_rc", label: { type: "plain_text", text: "Max Employees Per RC" },
+//         element: { type: "plain_text_input", action_id: "maxEmployeesPerRC" } },
+//       ...invoiceBlocks,
+//       {
+//         type: "actions",
+//         block_id: "add_invoice_btn",
+//         elements: [{ type: "button", text: { type: "plain_text", text: "Add Invoice" }, action_id: "add_invoice" }]
+//       }
+//     ]
+//   };
+// };
 
 /* ----------------------------------
    ⚡ SLACK APP
