@@ -307,40 +307,16 @@
 // index.js
 import "dotenv/config";
 import express from "express";
-import pkg from "@slack/bolt";
 import cors from "cors";
 import bodyParser from "body-parser";
-import pg from "pg";
-import fetch from "node-fetch";
-
-import billRoutes from "./routes/bill.routes.js";
-
 import { App, ExpressReceiver } from "@slack/bolt";
 
-
-export default receiver.app; // <-- this is your serverless handler
-
-const { Pool } = pg;
-
-/* ----------------------------------
-   🗄️ DATABASE
----------------------------------- */
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-export async function initDb() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS slack_installations (
-      id SERIAL PRIMARY KEY,
-      team_id TEXT UNIQUE NOT NULL,
-      team_name TEXT,
-      bot_token TEXT NOT NULL,
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-}
+import { pool, initDb } from "./db/index.js";
+import billRoutes from "./routes/bill.routes.js";
+import { createBill } from "./controllers/bill.controller.js";
 
 /* ----------------------------------
-   🔌 EXPRESS RECEIVER + SLACK INSTALLATION
+   🔌 EXPRESS RECEIVER + SLACK
 ---------------------------------- */
 const receiver = new ExpressReceiver({
   signingSecret: process.env.SLACK_SIGNING_SECRET,
@@ -369,20 +345,19 @@ const receiver = new ExpressReceiver({
 /* ----------------------------------
    🌐 EXPRESS APP
 ---------------------------------- */
-const expressApp = receiver.app;
-expressApp.use(express.json());
-expressApp.use(cors());
-expressApp.use(bodyParser.json());
-expressApp.use("/api/bill", billRoutes);
-expressApp.get("/", (_, res) => res.send("✅ Slack App Running"));
+const app = receiver.app;
+app.use(cors());
+app.use(bodyParser.json());
+app.use("/api/bill", billRoutes);
+app.get("/", (_, res) => res.send("✅ Slack App Running"));
 
 /* ----------------------------------
-   🤖 SLACK APP
+   🌱 INIT DATABASE
 ---------------------------------- */
-const app = new App({ receiver, processBeforeResponse: true });
+await initDb();
 
 /* ----------------------------------
-   🌱 PLANT MASTER
+   🧱 PLANTS LIST
 ---------------------------------- */
 const PLANTS = [
   { company: "LUMAX AUTO TECH LTD", plantCode: "7020", plantName: "LMPL PCNT PUNE-7020", location: "Pune" },
@@ -390,38 +365,22 @@ const PLANTS = [
 ];
 
 /* ----------------------------------
-   🧱 MODAL BUILDER (MULTIPLE INVOICES)
+   📄 BUILD INVOICE MODAL
 ---------------------------------- */
 const buildInvoiceModal = (invoiceRows = [], initialPlantName = "") => {
-  if (invoiceRows.length === 0) invoiceRows.push({}); // start with one empty invoice
+  if (invoiceRows.length === 0) invoiceRows.push({});
 
   const invoiceBlocks = invoiceRows.flatMap((inv, idx) => [
-    {
-      type: "header",
-      text: { type: "plain_text", text: `Invoice #${idx + 1}` }
-    },
-    {
-      type: "input",
-      block_id: `invoiceNo_${idx}`,
-      label: { type: "plain_text", text: "Invoice No" },
-      element: { type: "plain_text_input", action_id: "invoiceNo", initial_value: inv.invoiceNo || "" }
-    },
-    {
-      type: "input",
-      block_id: `invoiceDate_${idx}`,
-      label: { type: "plain_text", text: "Invoice Date" },
-      element: { type: "datepicker", action_id: "invoiceDate", initial_date: inv.invoiceDate || undefined }
-    },
-    {
-      type: "input",
-      block_id: `invoiceType_${idx}`,
-      label: { type: "plain_text", text: "Invoice Type" },
+    { type: "header", text: { type: "plain_text", text: `Invoice #${idx + 1}` } },
+    { type: "input", block_id: `invoiceNo_${idx}`, label: { type: "plain_text", text: "Invoice No" },
+      element: { type: "plain_text_input", action_id: "invoiceNo", initial_value: inv.invoiceNo || "" } },
+    { type: "input", block_id: `invoiceDate_${idx}`, label: { type: "plain_text", text: "Invoice Date" },
+      element: { type: "datepicker", action_id: "invoiceDate", initial_date: inv.invoiceDate || undefined } },
+    { type: "input", block_id: `invoiceType_${idx}`, label: { type: "plain_text", text: "Invoice Type" },
       element: {
         type: "static_select",
         action_id: "invoiceType",
-        initial_option: inv.invoiceType
-          ? { text: { type: "plain_text", text: inv.invoiceType }, value: inv.invoiceType }
-          : undefined,
+        initial_option: inv.invoiceType ? { text: { type: "plain_text", text: inv.invoiceType }, value: inv.invoiceType } : undefined,
         options: [
           { text: { type: "plain_text", text: "SERVICE" }, value: "SERVICE" },
           { text: { type: "plain_text", text: "PRODUCT" }, value: "PRODUCT" }
@@ -490,28 +449,23 @@ const buildInvoiceModal = (invoiceRows = [], initialPlantName = "") => {
 };
 
 /* ----------------------------------
-   /invoice COMMAND
+   ⚡ SLACK APP
 ---------------------------------- */
-app.command("/invoice", async ({ ack, body, client }) => {
+const slackApp = new App({ receiver, processBeforeResponse: true });
+
+slackApp.command("/invoice", async ({ ack, body, client }) => {
   await ack();
   await client.views.open({ trigger_id: body.trigger_id, view: buildInvoiceModal() });
 });
 
-/* ----------------------------------
-   AUTO-FILL PLANT NAME
----------------------------------- */
-app.action("plant_select", async ({ ack, action, client, view }) => {
+slackApp.action("plant_select", async ({ ack, action, client, view }) => {
   await ack();
   const selectedPlant = PLANTS.find(p => p.plantCode === action.selected_option.value);
   if (!selectedPlant) return;
-  const updatedView = buildInvoiceModal([], selectedPlant.plantName);
-  await client.views.update({ view_id: view.id, hash: view.hash, view: updatedView });
+  await client.views.update({ view_id: view.id, hash: view.hash, view: buildInvoiceModal([], selectedPlant.plantName) });
 });
 
-/* ----------------------------------
-   ADD INVOICE ROW
----------------------------------- */
-app.action("add_invoice", async ({ ack, body, client }) => {
+slackApp.action("add_invoice", async ({ ack, body, client }) => {
   await ack();
   const currentBlocks = body.view.blocks.filter(b => b.block_id && b.block_id.startsWith("invoiceNo"));
   const invoiceRows = currentBlocks.map((_, idx) => ({
@@ -528,15 +482,11 @@ app.action("add_invoice", async ({ ack, body, client }) => {
     invoiceType: body.view.state.values[`invoiceType_${idx}`]?.invoiceType?.selected_option?.value || "",
     invoiceDate: body.view.state.values[`invoiceDate_${idx}`]?.invoiceDate?.selected_date || ""
   }));
-
   invoiceRows.push({}); // add empty row
   await client.views.update({ view_id: body.view.id, hash: body.view.hash, view: buildInvoiceModal(invoiceRows) });
 });
 
-/* ----------------------------------
-   MODAL SUBMIT -> POST TO /api/bill
----------------------------------- */
-app.view("invoice_modal", async ({ ack, view, body }) => {
+slackApp.view("invoice_modal", async ({ ack, view, body }) => {
   await ack();
   const v = view.state.values;
 
@@ -545,7 +495,7 @@ app.view("invoice_modal", async ({ ack, view, body }) => {
     .map((blockId, idx) => ({
       invoiceNo: v[`invoiceNo_${idx}`].invoiceNo.value,
       invoiceDate: v[`invoiceDate_${idx}`].invoiceDate.selected_date,
-      invoiceType: v[`invoiceType_${idx}`].invoiceType.selected_option.value,
+      invoiceType: v[`invoiceType_${idx}`].invoiceType.selected_option?.value || "",
       amount: v[`amount_${idx}`].amount.value,
       serviceCharge: v[`serviceCharge_${idx}`].serviceCharge.value,
       esi: v[`esi_${idx}`].esi.value,
@@ -572,21 +522,19 @@ app.view("invoice_modal", async ({ ack, view, body }) => {
     createdBy: body.user.id
   };
 
-  console.log("✅ Payload to API:", payload);
-
-  await fetch("https://lumax-app.vercel.app/api/bill", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
+  // Call createBill directly
+  try {
+    const fakeReq = { body: payload };
+    const fakeRes = {
+      status: (code) => ({ json: (obj) => console.log("Response:", code, obj) }),
+    };
+    await createBill(fakeReq, fakeRes);
+  } catch (err) {
+    console.error("Error creating bill:", err);
+  }
 });
 
 /* ----------------------------------
-   START
+   ✅ EXPORT SERVERLESS HANDLER
 ---------------------------------- */
-(async () => {
-  await initDb();
-  const PORT = process.env.PORT || 3000;
-  await app.start(PORT);
-  console.log(`⚡ Slack app running on ${PORT}`);
-})();
+export default receiver.app;
