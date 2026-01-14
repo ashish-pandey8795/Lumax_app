@@ -1,3 +1,7 @@
+
+
+
+
 // import "dotenv/config";
 // import express from "express";
 // import pkg from "@slack/bolt";
@@ -180,6 +184,9 @@
 //   }
 // });
 
+
+
+
 // const PLANTS = [
 //   {
 //     company: "LUMAX AUTO TECH LTD",
@@ -194,6 +201,11 @@
 //     location: "Chakan"
 //   }
 // ];
+
+
+
+
+
 
 // app.command("/invoice", async ({ ack, body, client }) => {
 //   await ack();
@@ -327,6 +339,11 @@
 //   });
 // });
 
+
+
+
+
+
 // const buildInvoiceModal = (plantCode = "", plantName = "") => ({
 //   type: "modal",
 //   callback_id: "invoice_modal",
@@ -368,6 +385,7 @@
 //   ]
 // });
 
+
 import "dotenv/config";
 import express from "express";
 import pkg from "@slack/bolt";
@@ -405,9 +423,7 @@ const receiver = new ExpressReceiver({
   clientId: process.env.SLACK_CLIENT_ID,
   clientSecret: process.env.SLACK_CLIENT_SECRET,
   stateSecret: process.env.SESSION_SECRET || "slack-secret",
-
   scopes: ["commands", "chat:write"],
-
   installerOptions: {
     redirectUriPath: "/slack/oauth_redirect",
     stateVerification: false,
@@ -422,7 +438,11 @@ const receiver = new ExpressReceiver({
         ON CONFLICT (team_id)
         DO UPDATE SET bot_token = EXCLUDED.bot_token
         `,
-        [installation.team.id, installation.team.name, installation.bot.token]
+        [
+          installation.team.id,
+          installation.team.name,
+          installation.bot.token,
+        ]
       );
     },
 
@@ -479,14 +499,13 @@ const PLANTS = [
 ];
 
 /* ----------------------------------
-   🧱 MODAL BUILDER (STATE SAFE)
+   🧱 MODAL BUILDER (FIXED)
 ---------------------------------- */
-const buildInvoiceModal = (values = {}, plantCode = "", plantName = "") => ({
+const buildInvoiceModal = (values = {}, plant = null) => ({
   type: "modal",
   callback_id: "invoice_modal",
   title: { type: "plain_text", text: "Create Invoice" },
   submit: { type: "plain_text", text: "Submit" },
-  close: { type: "plain_text", text: "Cancel" },
 
   blocks: [
     {
@@ -502,7 +521,8 @@ const buildInvoiceModal = (values = {}, plantCode = "", plantName = "") => ({
             value: "LUMAX AUTO TECH LTD",
           },
         ],
-        initial_option: values.company?.company_select?.selected_option,
+        initial_option:
+          values.company?.company_select?.selected_option,
       },
     },
 
@@ -517,23 +537,22 @@ const buildInvoiceModal = (values = {}, plantCode = "", plantName = "") => ({
           text: { type: "plain_text", text: p.plantCode },
           value: p.plantCode,
         })),
-        initial_option: plantCode
+        initial_option: plant
           ? {
-              text: { type: "plain_text", text: plantCode },
-              value: plantCode,
+              text: { type: "plain_text", text: plant.plantCode },
+              value: plant.plantCode,
             }
           : values.plant?.plant_select?.selected_option,
       },
     },
 
+    /* ✅ READ-ONLY AUTO FILLED PLANT NAME */
     {
-      type: "input",
+      type: "section",
       block_id: "plant_name",
-      label: { type: "plain_text", text: "Plant Name" },
-      element: {
-        type: "plain_text_input",
-        action_id: "value",
-        initial_value: plantName || values.plant_name?.value?.value || "",
+      text: {
+        type: "mrkdwn",
+        text: `*Plant Name*\n${plant?.plantName || "_Select plant code_"}`,
       },
     },
 
@@ -596,7 +615,7 @@ app.action("plant_select", async ({ ack, body, client }) => {
   await client.views.update({
     view_id: body.view.id,
     hash: body.view.hash,
-    view: buildInvoiceModal(body.view.state.values, plantCode, plant.plantName),
+    view: buildInvoiceModal(body.view.state.values, plant),
   });
 });
 
@@ -607,7 +626,6 @@ app.view("invoice_modal", async ({ ack, view, body }) => {
   await ack();
 
   const v = view.state.values;
-
   const plantCode = v.plant.plant_select.selected_option.value;
   const plant = PLANTS.find((p) => p.plantCode === plantCode);
 
