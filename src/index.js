@@ -311,6 +311,7 @@ import pkg from "@slack/bolt";
 import cors from "cors";
 import bodyParser from "body-parser";
 import pg from "pg";
+import fetch from "node-fetch";
 
 import billRoutes from "./routes/bill.routes.js";
 
@@ -323,7 +324,6 @@ const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 export async function initDb() {
-  // Slack installation table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS slack_installations (
       id SERIAL PRIMARY KEY,
@@ -386,43 +386,104 @@ const PLANTS = [
 ];
 
 /* ----------------------------------
-   🧱 MODAL BUILDER
+   🧱 MODAL BUILDER (MULTIPLE INVOICES)
 ---------------------------------- */
-const buildInvoiceModal = (initialPlantName = "") => ({
-  type: "modal",
-  callback_id: "invoice_modal",
-  title: { type: "plain_text", text: "Create Invoice" },
-  submit: { type: "plain_text", text: "Submit" },
-  close: { type: "plain_text", text: "Cancel" },
-  blocks: [
-    { type: "input", block_id: "company", label: { type: "plain_text", text: "Company" },
-      element: { type: "static_select", action_id: "company_select",
-        options: [{ text: { type: "plain_text", text: "LUMAX AUTO TECH LTD" }, value: "LUMAX AUTO TECH LTD" }] } },
-    { type: "input", block_id: "plant", label: { type: "plain_text", text: "Plant Code" },
-      element: { type: "static_select", action_id: "plant_select",
-        options: PLANTS.map(p => ({ text: { type: "plain_text", text: p.plantCode }, value: p.plantCode })) } },
-    { type: "input", block_id: "plant_name", label: { type: "plain_text", text: "Plant Name" },
-      element: { type: "plain_text_input", action_id: "plant_name_input", initial_value: initialPlantName } },
-    { type: "input", block_id: "bill_month", label: { type: "plain_text", text: "Bill Month" },
-      element: { type: "datepicker", action_id: "value" } },
-    { type: "input", block_id: "contractor_name", label: { type: "plain_text", text: "Contractor Name" },
-      element: { type: "plain_text_input", action_id: "value" } },
-    { type: "input", block_id: "no_of_employees", label: { type: "plain_text", text: "No of Employees" },
-      element: { type: "plain_text_input", action_id: "value" } },
-    { type: "input", block_id: "mode", label: { type: "plain_text", text: "Mode" },
-      element: { type: "static_select", action_id: "value",
-        options: [{ text: { type: "plain_text", text: "MONTHLY" }, value: "MONTHLY" },
-                  { text: { type: "plain_text", text: "DAILY" }, value: "DAILY" }] } },
-    { type: "input", block_id: "area_of_work", label: { type: "plain_text", text: "Area of Work" },
-      element: { type: "plain_text_input", action_id: "value" } },
-    { type: "input", block_id: "max_employees_per_rc", label: { type: "plain_text", text: "Max Employees Per RC" },
-      element: { type: "plain_text_input", action_id: "value" } },
-    { type: "input", block_id: "invoice_no", label: { type: "plain_text", text: "Invoice No" },
-      element: { type: "plain_text_input", action_id: "value" } },
-    { type: "input", block_id: "amount", label: { type: "plain_text", text: "Amount (INR)" },
-      element: { type: "plain_text_input", action_id: "value" } },
-  ]
-});
+const buildInvoiceModal = (invoiceRows = [], initialPlantName = "") => {
+  if (invoiceRows.length === 0) invoiceRows.push({}); // start with one empty invoice
+
+  const invoiceBlocks = invoiceRows.flatMap((inv, idx) => [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `Invoice #${idx + 1}` }
+    },
+    {
+      type: "input",
+      block_id: `invoiceNo_${idx}`,
+      label: { type: "plain_text", text: "Invoice No" },
+      element: { type: "plain_text_input", action_id: "invoiceNo", initial_value: inv.invoiceNo || "" }
+    },
+    {
+      type: "input",
+      block_id: `invoiceDate_${idx}`,
+      label: { type: "plain_text", text: "Invoice Date" },
+      element: { type: "datepicker", action_id: "invoiceDate", initial_date: inv.invoiceDate || undefined }
+    },
+    {
+      type: "input",
+      block_id: `invoiceType_${idx}`,
+      label: { type: "plain_text", text: "Invoice Type" },
+      element: {
+        type: "static_select",
+        action_id: "invoiceType",
+        initial_option: inv.invoiceType
+          ? { text: { type: "plain_text", text: inv.invoiceType }, value: inv.invoiceType }
+          : undefined,
+        options: [
+          { text: { type: "plain_text", text: "SERVICE" }, value: "SERVICE" },
+          { text: { type: "plain_text", text: "PRODUCT" }, value: "PRODUCT" }
+        ]
+      }
+    },
+    { type: "input", block_id: `amount_${idx}`, label: { type: "plain_text", text: "Amount" },
+      element: { type: "plain_text_input", action_id: "amount", initial_value: inv.amount || "" } },
+    { type: "input", block_id: `serviceCharge_${idx}`, label: { type: "plain_text", text: "Service Charge" },
+      element: { type: "plain_text_input", action_id: "serviceCharge", initial_value: inv.serviceCharge || "" } },
+    { type: "input", block_id: `esi_${idx}`, label: { type: "plain_text", text: "ESI" },
+      element: { type: "plain_text_input", action_id: "esi", initial_value: inv.esi || "" } },
+    { type: "input", block_id: `pf_${idx}`, label: { type: "plain_text", text: "PF" },
+      element: { type: "plain_text_input", action_id: "pf", initial_value: inv.pf || "" } },
+    { type: "input", block_id: `pt_${idx}`, label: { type: "plain_text", text: "PT" },
+      element: { type: "plain_text_input", action_id: "pt", initial_value: inv.pt || "" } },
+    { type: "input", block_id: `lwf_${idx}`, label: { type: "plain_text", text: "LWF" },
+      element: { type: "plain_text_input", action_id: "lwf", initial_value: inv.lwf || "" } },
+    { type: "input", block_id: `total_${idx}`, label: { type: "plain_text", text: "Total" },
+      element: { type: "plain_text_input", action_id: "total", initial_value: inv.total || "" } },
+    { type: "input", block_id: `remarks_${idx}`, label: { type: "plain_text", text: "Remarks" },
+      element: { type: "plain_text_input", action_id: "remarks", initial_value: inv.remarks || "" } },
+    { type: "input", block_id: `fileUrl_${idx}`, label: { type: "plain_text", text: "Invoice File URL" },
+      element: { type: "plain_text_input", action_id: "fileUrl", initial_value: inv.fileUrl || "" } }
+  ]);
+
+  return {
+    type: "modal",
+    callback_id: "invoice_modal",
+    title: { type: "plain_text", text: "Create Invoice" },
+    submit: { type: "plain_text", text: "Submit" },
+    close: { type: "plain_text", text: "Cancel" },
+    blocks: [
+      { type: "input", block_id: "company", label: { type: "plain_text", text: "Company" },
+        element: { type: "static_select", action_id: "company_select",
+          options: [{ text: { type: "plain_text", text: "LUMAX AUTO TECH LTD" }, value: "LUMAX AUTO TECH LTD" }] } },
+      { type: "input", block_id: "plant", label: { type: "plain_text", text: "Plant Code" },
+        element: { type: "static_select", action_id: "plant_select",
+          options: PLANTS.map(p => ({ text: { type: "plain_text", text: p.plantCode }, value: p.plantCode })) } },
+      { type: "input", block_id: "plant_name", label: { type: "plain_text", text: "Plant Name" },
+        element: { type: "plain_text_input", action_id: "plant_name_input", initial_value: initialPlantName } },
+      { type: "input", block_id: "bill_month", label: { type: "plain_text", text: "Bill Month" },
+        element: { type: "datepicker", action_id: "value" } },
+      { type: "input", block_id: "contractor_name", label: { type: "plain_text", text: "Contractor Name" },
+        element: { type: "plain_text_input", action_id: "value" } },
+      { type: "input", block_id: "no_of_employees", label: { type: "plain_text", text: "No of Employees" },
+        element: { type: "plain_text_input", action_id: "value" } },
+      { type: "input", block_id: "mode", label: { type: "plain_text", text: "Mode" },
+        element: { type: "static_select", action_id: "value",
+          options: [
+            { text: { type: "plain_text", text: "MONTHLY" }, value: "MONTHLY" },
+            { text: { type: "plain_text", text: "DAILY" }, value: "DAILY" }
+          ] } },
+      { type: "input", block_id: "area_of_work", label: { type: "plain_text", text: "Area of Work" },
+        element: { type: "plain_text_input", action_id: "value" } },
+      { type: "input", block_id: "max_employees_per_rc", label: { type: "plain_text", text: "Max Employees Per RC" },
+        element: { type: "plain_text_input", action_id: "value" } },
+      ...invoiceBlocks,
+      {
+        type: "actions",
+        block_id: "add_invoice_btn",
+        elements: [{ type: "button", text: { type: "plain_text", text: "Add Invoice" }, action_id: "add_invoice" }]
+      }
+    ]
+  };
+};
 
 /* ----------------------------------
    /invoice COMMAND
@@ -439,20 +500,61 @@ app.action("plant_select", async ({ ack, action, client, view }) => {
   await ack();
   const selectedPlant = PLANTS.find(p => p.plantCode === action.selected_option.value);
   if (!selectedPlant) return;
-
-  const updatedView = buildInvoiceModal(selectedPlant.plantName);
+  const updatedView = buildInvoiceModal([], selectedPlant.plantName);
   await client.views.update({ view_id: view.id, hash: view.hash, view: updatedView });
 });
 
 /* ----------------------------------
-   MODAL SUBMIT (console only)
+   ADD INVOICE ROW
+---------------------------------- */
+app.action("add_invoice", async ({ ack, body, client }) => {
+  await ack();
+  const currentBlocks = body.view.blocks.filter(b => b.block_id && b.block_id.startsWith("invoiceNo"));
+  const invoiceRows = currentBlocks.map((_, idx) => ({
+    invoiceNo: body.view.state.values[`invoiceNo_${idx}`]?.invoiceNo?.value || "",
+    amount: body.view.state.values[`amount_${idx}`]?.amount?.value || "",
+    serviceCharge: body.view.state.values[`serviceCharge_${idx}`]?.serviceCharge?.value || "",
+    esi: body.view.state.values[`esi_${idx}`]?.esi?.value || "",
+    pf: body.view.state.values[`pf_${idx}`]?.pf?.value || "",
+    pt: body.view.state.values[`pt_${idx}`]?.pt?.value || "",
+    lwf: body.view.state.values[`lwf_${idx}`]?.lwf?.value || "",
+    total: body.view.state.values[`total_${idx}`]?.total?.value || "",
+    remarks: body.view.state.values[`remarks_${idx}`]?.remarks?.value || "",
+    fileUrl: body.view.state.values[`fileUrl_${idx}`]?.fileUrl?.value || "",
+    invoiceType: body.view.state.values[`invoiceType_${idx}`]?.invoiceType?.selected_option?.value || "",
+    invoiceDate: body.view.state.values[`invoiceDate_${idx}`]?.invoiceDate?.selected_date || ""
+  }));
+
+  invoiceRows.push({}); // add empty row
+  await client.views.update({ view_id: body.view.id, hash: body.view.hash, view: buildInvoiceModal(invoiceRows) });
+});
+
+/* ----------------------------------
+   MODAL SUBMIT -> POST TO /api/bill
 ---------------------------------- */
 app.view("invoice_modal", async ({ ack, view, body }) => {
   await ack();
   const v = view.state.values;
 
+  const invoiceRows = Object.keys(v)
+    .filter(k => k.startsWith("invoiceNo"))
+    .map((blockId, idx) => ({
+      invoiceNo: v[`invoiceNo_${idx}`].invoiceNo.value,
+      invoiceDate: v[`invoiceDate_${idx}`].invoiceDate.selected_date,
+      invoiceType: v[`invoiceType_${idx}`].invoiceType.selected_option.value,
+      amount: v[`amount_${idx}`].amount.value,
+      serviceCharge: v[`serviceCharge_${idx}`].serviceCharge.value,
+      esi: v[`esi_${idx}`].esi.value,
+      pf: v[`pf_${idx}`].pf.value,
+      pt: v[`pt_${idx}`].pt.value,
+      lwf: v[`lwf_${idx}`].lwf.value,
+      total: v[`total_${idx}`].total.value,
+      remarks: v[`remarks_${idx}`].remarks.value,
+      fileUrl: v[`fileUrl_${idx}`].fileUrl.value
+    }));
+
   const payload = {
-    company: v.company.company_select.selected_option.value,
+    companyName: v.company.company_select.selected_option.value,
     plantCode: v.plant.plant_select.selected_option.value,
     plantName: v.plant_name.plant_name_input.value,
     location: PLANTS.find(p => p.plantCode === v.plant.plant_select.selected_option.value)?.location,
@@ -462,12 +564,17 @@ app.view("invoice_modal", async ({ ack, view, body }) => {
     mode: v.mode.value.selected_option.value,
     areaOfWork: v.area_of_work.value.value,
     maxEmployeesPerRC: v.max_employees_per_rc.value.value,
-    invoiceNo: v.invoice_no.value.value,
-    amount: v.amount.value.value,
-    createdBy: body.user.id,
+    invoices: invoiceRows,
+    createdBy: body.user.id
   };
 
-  console.log("✅ Payload from Modal:", payload);
+  console.log("✅ Payload to API:", payload);
+
+  await fetch("http://localhost:3000/api/bill", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
 });
 
 /* ----------------------------------
