@@ -329,17 +329,27 @@ const receiver = new ExpressReceiver({
   installerOptions: { redirectUriPath: "/slack/oauth_redirect", stateVerification: false },
   installationStore: {
     storeInstallation: async (installation) => {
-      await pool.query(
-        `INSERT INTO slack_installations (team_id, team_name, bot_token)
-         VALUES ($1,$2,$3)
-         ON CONFLICT (team_id) DO UPDATE SET bot_token = EXCLUDED.bot_token`,
-        [installation.team.id, installation.team.name, installation.bot.token]
-      );
+      try {
+        await pool.query(
+          `INSERT INTO slack_installations (team_id, team_name, bot_token)
+           VALUES ($1,$2,$3)
+           ON CONFLICT (team_id) DO UPDATE SET bot_token = EXCLUDED.bot_token`,
+          [installation.team.id, installation.team.name, installation.bot.token]
+        );
+      } catch (err) {
+        console.error("❌ Error storing installation:", err);
+        throw err;
+      }
     },
     fetchInstallation: async ({ teamId }) => {
-      const res = await pool.query(`SELECT * FROM slack_installations WHERE team_id=$1`, [teamId]);
-      if (!res.rows.length) throw new Error("No installation found for team");
-      return { team: { id: res.rows[0].team_id }, bot: { token: res.rows[0].bot_token } };
+      try {
+        const res = await pool.query(`SELECT * FROM slack_installations WHERE team_id=$1`, [teamId]);
+        if (!res.rows.length) throw new Error("No installation found for team");
+        return { team: { id: res.rows[0].team_id }, bot: { token: res.rows[0].bot_token } };
+      } catch (err) {
+        console.error("❌ Error fetching installation:", err);
+        throw err;
+      }
     },
   },
 });
@@ -356,7 +366,13 @@ app.get("/", (_, res) => res.send("✅ Slack App Running"));
 /* ----------------------------------
    🌱 INIT DATABASE
 ---------------------------------- */
-await initDb();
+try {
+  await initDb();
+  console.log("✅ Database initialized successfully");
+} catch (err) {
+  console.error("❌ Failed to initialize database:", err);
+  process.exit(1); // stop if DB cannot connect
+}
 
 /* ----------------------------------
    🧱 PLANTS LIST
@@ -464,7 +480,6 @@ slackApp.command("/invoice", async ({ ack, body, client }) => {
 // ADD INVOICE ROW
 slackApp.action("add_invoice", async ({ ack, body, client }) => {
   await ack();
-
   try {
     const v = body.view.state.values;
     const invoiceRows = [];
@@ -486,7 +501,7 @@ slackApp.action("add_invoice", async ({ ack, body, client }) => {
       });
       idx++;
     }
-    invoiceRows.push({}); // add empty row
+    invoiceRows.push({});
     await client.views.update({ view_id: body.view.id, hash: body.view.hash, view: buildInvoiceModal(invoiceRows) });
   } catch (err) {
     console.error("❌ Error adding invoice row:", err);
@@ -497,12 +512,10 @@ slackApp.action("add_invoice", async ({ ack, body, client }) => {
 // MODAL SUBMIT
 slackApp.view("invoice_modal", async ({ ack, view, body, client }) => {
   await ack();
-
   try {
     const v = view.state.values;
     console.log("🔹 Slack modal payload:", JSON.stringify(v, null, 2));
 
-    // Extract invoice rows
     const invoiceRows = [];
     let idx = 0;
     while (v[`invoiceNo_${idx}`]) {
@@ -523,7 +536,6 @@ slackApp.view("invoice_modal", async ({ ack, view, body, client }) => {
       idx++;
     }
 
-    // Build payload
     const payload = {
       companyName: v.company?.company_select?.selected_option?.value || "",
       plantCode: v.plant?.plant_select?.selected_option?.value || "",
@@ -541,7 +553,6 @@ slackApp.view("invoice_modal", async ({ ack, view, body, client }) => {
 
     console.log("🔹 Payload to API:", JSON.stringify(payload, null, 2));
 
-    // Submit to backend API
     const apiUrl = process.env.BASE_URL || "http://localhost:3000";
     const res = await fetch(`${apiUrl}/api/bill`, {
       method: "POST",
@@ -565,6 +576,20 @@ slackApp.view("invoice_modal", async ({ ack, view, body, client }) => {
 });
 
 /* ----------------------------------
-   ✅ EXPORT SERVERLESS HANDLER
+   🌍 GLOBAL ERROR HANDLERS
 ---------------------------------- */
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("❌ Uncaught Exception:", err);
+});
+
+/* ----------------------------------
+   🚀 START SERVER (LOCAL TESTING)
+---------------------------------- */
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+
 export default receiver.app;
