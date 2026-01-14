@@ -425,21 +425,21 @@ const buildInvoiceModal = (invoiceRows = [], initialPlantName = "") => {
       { type: "input", block_id: "plant_name", label: { type: "plain_text", text: "Plant Name" },
         element: { type: "plain_text_input", action_id: "plant_name_input", initial_value: initialPlantName } },
       { type: "input", block_id: "bill_month", label: { type: "plain_text", text: "Bill Month" },
-        element: { type: "datepicker", action_id: "value" } },
+        element: { type: "datepicker", action_id: "billMonth" } },
       { type: "input", block_id: "contractor_name", label: { type: "plain_text", text: "Contractor Name" },
-        element: { type: "plain_text_input", action_id: "value" } },
+        element: { type: "plain_text_input", action_id: "contractorName" } },
       { type: "input", block_id: "no_of_employees", label: { type: "plain_text", text: "No of Employees" },
-        element: { type: "plain_text_input", action_id: "value" } },
+        element: { type: "plain_text_input", action_id: "noOfEmployees" } },
       { type: "input", block_id: "mode", label: { type: "plain_text", text: "Mode" },
-        element: { type: "static_select", action_id: "value",
+        element: { type: "static_select", action_id: "mode",
           options: [
             { text: { type: "plain_text", text: "MONTHLY" }, value: "MONTHLY" },
             { text: { type: "plain_text", text: "DAILY" }, value: "DAILY" }
           ] } },
       { type: "input", block_id: "area_of_work", label: { type: "plain_text", text: "Area of Work" },
-        element: { type: "plain_text_input", action_id: "value" } },
+        element: { type: "plain_text_input", action_id: "areaOfWork" } },
       { type: "input", block_id: "max_employees_per_rc", label: { type: "plain_text", text: "Max Employees Per RC" },
-        element: { type: "plain_text_input", action_id: "value" } },
+        element: { type: "plain_text_input", action_id: "maxEmployeesPerRC" } },
       ...invoiceBlocks,
       {
         type: "actions",
@@ -455,31 +455,13 @@ const buildInvoiceModal = (invoiceRows = [], initialPlantName = "") => {
 ---------------------------------- */
 const slackApp = new App({ receiver, processBeforeResponse: true });
 
-// Open modal command
+// OPEN MODAL
 slackApp.command("/invoice", async ({ ack, body, client }) => {
   await ack();
-  console.log("Slash command triggered:", body.user_id, body.trigger_id);
-  try {
-    await client.views.open({
-      trigger_id: body.trigger_id,
-      view: buildInvoiceModal()
-    });
-    console.log("Modal opened successfully");
-  } catch (err) {
-    console.error("Failed to open modal:", err.data || err);
-  }
+  await client.views.open({ trigger_id: body.trigger_id, view: buildInvoiceModal() });
 });
 
-
-// Auto-fill plant name
-slackApp.action("plant_select", async ({ ack, action, client, view }) => {
-  await ack();
-  const selectedPlant = PLANTS.find(p => p.plantCode === action.selected_option.value);
-  if (!selectedPlant) return;
-  await client.views.update({ view_id: view.id, hash: view.hash, view: buildInvoiceModal([], selectedPlant.plantName) });
-});
-
-// Add invoice row
+// ADD INVOICE ROW
 slackApp.action("add_invoice", async ({ ack, body, client }) => {
   await ack();
 
@@ -508,7 +490,7 @@ slackApp.action("add_invoice", async ({ ack, body, client }) => {
   await client.views.update({ view_id: body.view.id, hash: body.view.hash, view: buildInvoiceModal(invoiceRows) });
 });
 
-// Modal submit
+// MODAL SUBMIT
 slackApp.view("invoice_modal", async ({ ack, view, body }) => {
   await ack();
 
@@ -518,15 +500,15 @@ slackApp.view("invoice_modal", async ({ ack, view, body }) => {
   while (v[`invoiceNo_${idx}`]) {
     invoiceRows.push({
       invoiceNo: v[`invoiceNo_${idx}`].invoiceNo.value,
-      invoiceDate: v[`invoiceDate_${idx}`].invoiceDate.selected_date || "",
-      invoiceType: v[`invoiceType_${idx}`].invoiceType.selected_option?.value || "",
-      amount: v[`amount_${idx}`].amount.value,
-      serviceCharge: v[`serviceCharge_${idx}`].serviceCharge.value,
-      esi: v[`esi_${idx}`].esi.value,
-      pf: v[`pf_${idx}`].pf.value,
-      pt: v[`pt_${idx}`].pt.value,
-      lwf: v[`lwf_${idx}`].lwf.value,
-      total: v[`total_${idx}`].total.value,
+      invoiceDate: v[`invoiceDate_${idx}`].invoiceDate.selected_date,
+      invoiceType: v[`invoiceType_${idx}`].invoiceType.selected_option?.value,
+      amount: Number(v[`amount_${idx}`].amount.value),
+      serviceCharge: Number(v[`serviceCharge_${idx}`].serviceCharge.value),
+      esi: Number(v[`esi_${idx}`].esi.value),
+      pf: Number(v[`pf_${idx}`].pf.value),
+      pt: Number(v[`pt_${idx}`].pt.value),
+      lwf: Number(v[`lwf_${idx}`].lwf.value),
+      total: Number(v[`total_${idx}`].total.value),
       remarks: v[`remarks_${idx}`].remarks.value,
       fileUrl: v[`fileUrl_${idx}`].fileUrl.value
     });
@@ -538,17 +520,18 @@ slackApp.view("invoice_modal", async ({ ack, view, body }) => {
     plantCode: v.plant.plant_select.selected_option.value,
     plantName: v.plant_name.plant_name_input.value,
     location: PLANTS.find(p => p.plantCode === v.plant.plant_select.selected_option.value)?.location,
-    billMonth: v.bill_month.value.selected_date,
-    contractorName: v.contractor_name.value.value,
-    noOfEmployees: v.no_of_employees.value.value,
-    mode: v.mode.value.selected_option.value,
-    areaOfWork: v.area_of_work.value.value,
-    maxEmployeesPerRC: v.max_employees_per_rc.value.value,
+    billMonth: v.bill_month.billMonth.selected_date,
+    contractorName: v.contractor_name.contractorName.value,
+    noOfEmployees: Number(v.no_of_employees.noOfEmployees.value),
+    mode: v.mode.mode.selected_option.value,
+    areaOfWork: v.area_of_work.areaOfWork.value,
+    maxEmployeesPerRC: Number(v.max_employees_per_rc.maxEmployeesPerRC.value),
     invoices: invoiceRows,
     createdBy: body.user.id
   };
 
-  // Send to serverless API
+  console.log("Payload to API:", payload);
+
   try {
     await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/bill`, {
       method: "POST",
