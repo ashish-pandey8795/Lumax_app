@@ -426,104 +426,13 @@
 // })();
 
 
-
-import "dotenv/config";
-import express from "express";
-import pkg from "@slack/bolt";
-import cors from "cors";
-import bodyParser from "body-parser";
-import pg from "pg";
-
-const { App, ExpressReceiver } = pkg;
-const { Pool } = pg;
-
-/* ----------------------------------
-   🗄️ DATABASE
----------------------------------- */
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
-
-/* ----------------------------------
-   🔌 EXPRESS RECEIVER
----------------------------------- */
-const receiver = new ExpressReceiver({
-  signingSecret: process.env.SLACK_SIGNING_SECRET,
-  clientId: process.env.SLACK_CLIENT_ID,
-  clientSecret: process.env.SLACK_CLIENT_SECRET,
-  stateSecret: process.env.SESSION_SECRET || "slack-secret",
-  scopes: ["commands", "chat:write"],
-  installerOptions: {
-    redirectUriPath: "/slack/oauth_redirect",
-    stateVerification: false,
-  },
-});
-
-/* ----------------------------------
-   🌐 EXPRESS APP
----------------------------------- */
-const expressApp = receiver.app;
-expressApp.use(express.json());
-expressApp.use(cors());
-expressApp.use(bodyParser.json());
-
-expressApp.get("/", (_, res) => {
-  res.send("✅ Slack App Running");
-});
-
-/* ----------------------------------
-   🤖 SLACK APP
----------------------------------- */
-const app = new App({
-  receiver,
-  processBeforeResponse: true,
-});
-
-/* ----------------------------------
-   🏭 PLANTS MASTER
----------------------------------- */
-const PLANTS = [
-  {
-    company: "LUMAX AUTO TECH LTD",
-    plantCode: "7020",
-    plantName: "LMPL PCNT PUNE-7020",
-    location: "Pune",
-  },
-  {
-    company: "LUMAX AUTO TECH LTD",
-    plantCode: "7030",
-    plantName: "LMPL CHAKAN-7030",
-    location: "Chakan",
-  },
-];
-
-/* ----------------------------------
-   🧱 MODAL BUILDER
----------------------------------- */
 const buildInvoiceModal = (plantCode = "", plantName = "") => ({
   type: "modal",
   callback_id: "invoice_modal",
-  title: { type: "plain_text", text: "Create Bill" },
+  title: { type: "plain_text", text: "Create Invoice" },
   submit: { type: "plain_text", text: "Submit" },
-  close: { type: "plain_text", text: "Cancel" },
 
   blocks: [
-    {
-      type: "input",
-      block_id: "company",
-      label: { type: "plain_text", text: "Company" },
-      element: {
-        type: "static_select",
-        action_id: "value",
-        options: [
-          {
-            text: { type: "plain_text", text: "LUMAX AUTO TECH LTD" },
-            value: "LUMAX AUTO TECH LTD",
-          },
-        ],
-      },
-    },
-
     {
       type: "input",
       block_id: "plant",
@@ -532,17 +441,17 @@ const buildInvoiceModal = (plantCode = "", plantName = "") => ({
         type: "static_select",
         action_id: "plant_select",
         dispatch_action: true,
-        options: PLANTS.map((p) => ({
+        options: PLANTS.map(p => ({
           text: { type: "plain_text", text: p.plantCode },
-          value: p.plantCode,
+          value: p.plantCode
         })),
         initial_option: plantCode
           ? {
               text: { type: "plain_text", text: plantCode },
-              value: plantCode,
+              value: plantCode
             }
-          : undefined,
-      },
+          : undefined
+      }
     },
 
     {
@@ -552,111 +461,8 @@ const buildInvoiceModal = (plantCode = "", plantName = "") => ({
       element: {
         type: "plain_text_input",
         action_id: "value",
-        initial_value: plantName,
-      },
-    },
-
-    {
-      type: "input",
-      block_id: "bill_month",
-      label: { type: "plain_text", text: "Bill Month" },
-      element: { type: "datepicker", action_id: "value" },
-    },
-
-    {
-      type: "input",
-      block_id: "contractor",
-      label: { type: "plain_text", text: "Contractor Name" },
-      element: { type: "plain_text_input", action_id: "value" },
-    },
-
-    {
-      type: "input",
-      block_id: "invoice_no",
-      label: { type: "plain_text", text: "Invoice No" },
-      element: { type: "plain_text_input", action_id: "value" },
-    },
-
-    {
-      type: "input",
-      block_id: "invoice_date",
-      label: { type: "plain_text", text: "Invoice Date" },
-      element: { type: "datepicker", action_id: "value" },
-    },
-
-    {
-      type: "input",
-      block_id: "amount",
-      label: { type: "plain_text", text: "Amount (INR)" },
-      element: { type: "plain_text_input", action_id: "value" },
-    },
-  ],
+        initial_value: plantName
+      }
+    }
+  ]
 });
-
-/* ----------------------------------
-   /invoice COMMAND
----------------------------------- */
-app.command("/invoice", async ({ ack, body, client }) => {
-  await ack();
-
-  await client.views.open({
-    trigger_id: body.trigger_id,
-    view: buildInvoiceModal(),
-  });
-});
-
-/* ----------------------------------
-   🔁 PLANT SELECT ACTION
----------------------------------- */
-app.action("plant_select", async ({ ack, body, client }) => {
-  await ack();
-
-  const plantCode = body.actions[0].selected_option.value;
-  const plant = PLANTS.find((p) => p.plantCode === plantCode);
-
-  await client.views.update({
-    view_id: body.view.id,
-    hash: body.view.hash,
-    view: buildInvoiceModal(plantCode, plant.plantName),
-  });
-});
-
-/* ----------------------------------
-   📩 MODAL SUBMIT
----------------------------------- */
-app.view("invoice_modal", async ({ ack, view }) => {
-  await ack();
-
-  const v = view.state.values;
-
-  const plantCode = v.plant.plant_select.selected_option.value;
-  const plant = PLANTS.find((p) => p.plantCode === plantCode);
-
-  const payload = {
-    companyName: v.company.value.selected_option.value,
-    plantCode,
-    plantName: plant.plantName,
-    location: plant.location,
-    billMonth: v.bill_month.value.selected_date,
-    contractorName: v.contractor.value.value,
-    invoices: [
-      {
-        invoiceNo: v.invoice_no.value.value,
-        invoiceDate: v.invoice_date.value.selected_date,
-        amount: v.amount.value.value,
-        total: v.amount.value.value,
-      },
-    ],
-  };
-
-  console.log("✅ FINAL BILL PAYLOAD", payload);
-});
-
-/* ----------------------------------
-   🚀 START SERVER
----------------------------------- */
-(async () => {
-  const PORT = process.env.PORT || 3000;
-  await app.start(PORT);
-  console.log(`⚡ Slack App running on http://localhost:${PORT}`);
-})();
