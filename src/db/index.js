@@ -1,8 +1,8 @@
 // db/index.js
 import pkg from "pg";
+import express from 'express';
 const { Pool } = pkg;
 import dotenv from "dotenv";
-import express from 'express';
 dotenv.config();
 
 export const pool = new Pool({
