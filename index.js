@@ -52,10 +52,7 @@
 // /* -------------------------------------------------------
 //    :zap: SLACK APP (NO authorize HERE)
 // ------------------------------------------------------- */
-// const app = new App({
-//   receiver,
-//   processBeforeResponse: true,
-// });
+
 
 // /* -------------------------------------------------------
 //    :globe_with_meridians: ROOT ROUTE
@@ -468,7 +465,7 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import pg from "pg";
 
-import billRoutes from "./routes/bill.routes.js";
+import billRoutes from "./src/routes/bill.routes.js";
 
 const { App, ExpressReceiver } = pkg;
 const { Pool } = pg;
