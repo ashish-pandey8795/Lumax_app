@@ -457,7 +457,93 @@
 
 
 
-// index.js
+// // index.js
+// import "dotenv/config";
+// import express from "express";
+// import pkg from "@slack/bolt";
+// import cors from "cors";
+// import bodyParser from "body-parser";
+// import pg from "pg";
+
+// import billRoutes from "./src/routes/bill.routes.js";
+
+// const { App, ExpressReceiver } = pkg;
+// const { Pool } = pg;
+
+// /* ----------------------------------
+//    🗄️ DATABASE
+// ---------------------------------- */
+// const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// export async function initDb() {
+//   // Slack installation table
+//   await pool.query(`
+//     CREATE TABLE IF NOT EXISTS slack_installations (
+//       id SERIAL PRIMARY KEY,
+//       team_id TEXT UNIQUE NOT NULL,
+//       team_name TEXT,
+//       bot_token TEXT NOT NULL,
+//       created_at TIMESTAMP DEFAULT NOW()
+//     )
+//   `);
+// }
+
+// /* ----------------------------------
+//    🔌 EXPRESS RECEIVER + SLACK INSTALLATION
+// ---------------------------------- */
+// const receiver = new ExpressReceiver({
+//   signingSecret: process.env.SLACK_SIGNING_SECRET,
+//   clientId: process.env.SLACK_CLIENT_ID,
+//   clientSecret: process.env.SLACK_CLIENT_SECRET,
+//   stateSecret: process.env.SESSION_SECRET || "slack-secret",
+//   scopes: ["commands", "chat:write"],
+//   installerOptions: { redirectUriPath: "/slack/oauth_redirect", stateVerification: false },
+//   installationStore: {
+//     storeInstallation: async (installation) => {
+//       await pool.query(
+//         `INSERT INTO slack_installations (team_id, team_name, bot_token)
+//          VALUES ($1,$2,$3)
+//          ON CONFLICT (team_id) DO UPDATE SET bot_token = EXCLUDED.bot_token`,
+//         [installation.team.id, installation.team.name, installation.bot.token]
+//       );
+//     },
+//     fetchInstallation: async ({ teamId }) => {
+//       const res = await pool.query(`SELECT * FROM slack_installations WHERE team_id=$1`, [teamId]);
+//       if (!res.rows.length) throw new Error("No installation found for team");
+//       return { team: { id: res.rows[0].team_id }, bot: { token: res.rows[0].bot_token } };
+//     },
+//   },
+// });
+
+// /* ----------------------------------
+//    🌐 EXPRESS APP
+// ---------------------------------- */
+// const expressApp = receiver.app;
+// expressApp.use(express.json());
+// expressApp.use(cors());
+// expressApp.use(bodyParser.json());
+// expressApp.use("/api/bill", billRoutes);
+// expressApp.get("/", (_, res) => res.send("✅ Slack App Running"));
+
+// /* ----------------------------------
+//    🤖 SLACK APP
+// ---------------------------------- */
+// const app = new App({ receiver, processBeforeResponse: true });
+
+
+
+// /* ----------------------------------
+//    START
+// ---------------------------------- */
+// (async () => {
+//   await initDb();
+//   const PORT = process.env.PORT || 3000;
+//   await app.start(PORT);
+//   console.log(`⚡ Slack app running on ${PORT}`);
+// })();
+
+
+
 import "dotenv/config";
 import express from "express";
 import pkg from "@slack/bolt";
@@ -465,6 +551,7 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import pg from "pg";
 
+// ✅ Import your bill routes
 import billRoutes from "./src/routes/bill.routes.js";
 
 const { App, ExpressReceiver } = pkg;
@@ -473,44 +560,76 @@ const { Pool } = pg;
 /* ----------------------------------
    🗄️ DATABASE
 ---------------------------------- */
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
-export async function initDb() {
-  // Slack installation table
+async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS slack_installations (
       id SERIAL PRIMARY KEY,
       team_id TEXT UNIQUE NOT NULL,
       team_name TEXT,
       bot_token TEXT NOT NULL,
+      bot_user_id TEXT,
+      installed_by TEXT,
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
 }
 
 /* ----------------------------------
-   🔌 EXPRESS RECEIVER + SLACK INSTALLATION
+   🔌 EXPRESS RECEIVER (OAuth)
 ---------------------------------- */
 const receiver = new ExpressReceiver({
   signingSecret: process.env.SLACK_SIGNING_SECRET,
   clientId: process.env.SLACK_CLIENT_ID,
   clientSecret: process.env.SLACK_CLIENT_SECRET,
   stateSecret: process.env.SESSION_SECRET || "slack-secret",
-  scopes: ["commands", "chat:write"],
-  installerOptions: { redirectUriPath: "/slack/oauth_redirect", stateVerification: false },
+
+  scopes: ["commands", "chat:write", "users:read"],
+
+  installerOptions: {
+    redirectUriPath: "/slack/oauth_redirect",
+    stateVerification: false,
+  },
+
   installationStore: {
     storeInstallation: async (installation) => {
+      const teamId = installation.team.id;
+      const teamName = installation.team.name;
+
       await pool.query(
-        `INSERT INTO slack_installations (team_id, team_name, bot_token)
-         VALUES ($1,$2,$3)
-         ON CONFLICT (team_id) DO UPDATE SET bot_token = EXCLUDED.bot_token`,
-        [installation.team.id, installation.team.name, installation.bot.token]
+        `
+        INSERT INTO slack_installations (team_id, team_name, bot_token)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (team_id)
+        DO UPDATE SET
+          team_name = EXCLUDED.team_name,
+          bot_token = EXCLUDED.bot_token
+      `,
+        [teamId, teamName, installation.bot.token]
       );
+
+      console.log(`✅ Slack installed for: ${teamName}`);
     },
+
     fetchInstallation: async ({ teamId }) => {
-      const res = await pool.query(`SELECT * FROM slack_installations WHERE team_id=$1`, [teamId]);
-      if (!res.rows.length) throw new Error("No installation found for team");
-      return { team: { id: res.rows[0].team_id }, bot: { token: res.rows[0].bot_token } };
+      const res = await pool.query(
+        "SELECT * FROM slack_installations WHERE team_id = $1",
+        [teamId]
+      );
+
+      if (!res.rows.length) {
+        throw new Error("No installation found");
+      }
+
+      const row = res.rows[0];
+
+      return {
+        team: { id: row.team_id, name: row.team_name },
+        bot: { token: row.bot_token },
+      };
     },
   },
 });
@@ -522,22 +641,88 @@ const expressApp = receiver.app;
 expressApp.use(express.json());
 expressApp.use(cors());
 expressApp.use(bodyParser.json());
+
+// ✅ Mount bill routes
 expressApp.use("/api/bill", billRoutes);
-expressApp.get("/", (_, res) => res.send("✅ Slack App Running"));
+
+/* ----------------------------------
+   🏠 HEALTH CHECK
+---------------------------------- */
+expressApp.get("/", (_, res) => {
+  res.send("✅ Slack OAuth App Running");
+});
+
+/* ----------------------------------
+   🔑 SLACK INSTALL PAGE
+---------------------------------- */
+expressApp.get("/slack/install", (_, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head><title>Install Slack App</title></head>
+      <body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif">
+        <a href="/slack/oauth_redirect">
+          <img
+            alt="Add to Slack"
+            height="40"
+            width="139"
+            src="https://platform.slack-edge.com/img/add_to_slack.png"
+          />
+        </a>
+      </body>
+    </html>
+  `);
+});
 
 /* ----------------------------------
    🤖 SLACK APP
 ---------------------------------- */
-const app = new App({ receiver, processBeforeResponse: true });
-
-
+const app = new App({
+  receiver,
+  processBeforeResponse: true,
+});
 
 /* ----------------------------------
-   START
+   🏠 APP HOME
+---------------------------------- */
+app.event("app_home_opened", async ({ event, client }) => {
+  try {
+    await client.views.publish({
+      user_id: event.user,
+      view: {
+        type: "home",
+        blocks: [
+          {
+            type: "header",
+            text: { type: "plain_text", text: "👋 Welcome to Lumax CRM" },
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "Slack app successfully installed!* 🎉\n\nManage CRM actions directly from Slack.",
+            },
+          },
+          { type: "divider" },
+        ],
+      },
+    });
+  } catch (err) {
+    console.error("❌ App Home error:", err);
+  }
+});
+
+/* ----------------------------------
+   🚀 START SERVER
 ---------------------------------- */
 (async () => {
-  await initDb();
-  const PORT = process.env.PORT || 3000;
-  await app.start(PORT);
-  console.log(`⚡ Slack app running on ${PORT}`);
+  try {
+    await initDb();
+    const PORT = process.env.PORT || 3000;
+    await app.start(PORT);
+    console.log(`⚡ Slack App running on http://localhost:${PORT}`);
+  } catch (err) {
+    console.error("❌ Server start failed:", err);
+    process.exit(1);
+  }
 })();
